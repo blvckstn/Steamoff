@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Steamoff.App/Steamoff.App.csproj" />
+    <Project Path="src/Steamoff.Core/Steamoff.Core.csproj" />
+    <Project Path="src/Steamoff.Infrastructure/Steamoff.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Steamoff.Tests/Steamoff.Tests.csproj" />
+  </Folder>
+</Solution>

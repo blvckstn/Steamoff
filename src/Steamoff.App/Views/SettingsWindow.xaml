@@ -1,0 +1,233 @@
+<Window x:Class="Steamoff.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="clr-namespace:Steamoff.Core.Models;assembly=Steamoff.Core"
+        xmlns:conv="clr-namespace:Steamoff.App.Converters"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d"
+        Title="{Binding Loc[settings.title]}"
+        Width="640" Height="720" MinWidth="520" MinHeight="540"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BackgroundBrush}"
+        FontFamily="Segoe UI"
+        Closing="OnWindowClosing">
+    <Window.Resources>
+        <conv:LanguageEqualityConverter x:Key="LanguageEqualityConverter"/>
+        <conv:TestOutcomeToBrushConverter x:Key="TestOutcomeToBrushConverter"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+
+        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextStyle}">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="LanguageCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+            <Setter Property="CornerRadius" Value="{StaticResource ControlRadius}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderDarkBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <DataTrigger Value="True">
+                    <DataTrigger.Binding>
+                        <MultiBinding Converter="{StaticResource LanguageEqualityConverter}">
+                            <Binding/>
+                            <Binding Path="DataContext.SelectedLanguage" RelativeSource="{RelativeSource AncestorType=ItemsControl}"/>
+                        </MultiBinding>
+                    </DataTrigger.Binding>
+                    <Setter Property="BorderBrush" Value="{StaticResource AccentOrangeBrush}"/>
+                    <Setter Property="BorderThickness" Value="2"/>
+                    <Setter Property="Background" Value="{StaticResource SurfaceElevatedBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <TextBlock Grid.Row="0" Style="{StaticResource HeadingTextStyle}" Text="{Binding Loc[settings.title]}" Margin="0,0,0,14"/>
+
+        <!-- Language bar — topmost element above all settings sections -->
+        <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,16" Padding="14">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{Binding Loc[language.bar.title]}"/>
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding Languages}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:AppLanguage}">
+                                <Border Style="{StaticResource LanguageCardStyle}">
+                                    <Border.InputBindings>
+                                        <MouseBinding MouseAction="LeftClick"
+                                                      Command="{Binding DataContext.SelectLanguageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      CommandParameter="{Binding}"/>
+                                    </Border.InputBindings>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding FlagEmoji}" FontSize="18" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding DisplayCode}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                        <TextBlock Text="{Binding NativeName}" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
+
+        <!-- Scrollable settings sections -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <!-- Modes / behavior -->
+                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{Binding Loc[settings.section.modes]}"/>
+                        <CheckBox Style="{StaticResource DarkCheckBoxStyle}" Margin="0,4" Content="{Binding Loc[settings.blockInbound]}"
+                                  IsChecked="{Binding BlockInbound}"/>
+                        <CheckBox Style="{StaticResource DarkCheckBoxStyle}" Margin="0,4" Content="{Binding Loc[settings.blockAllExeInSteamFolder]}"
+                                  IsChecked="{Binding BlockAllExecutablesInSteamFolder}"/>
+                        <CheckBox Style="{StaticResource DarkCheckBoxStyle}" Margin="0,4" Content="{Binding Loc[settings.warnBeforeUnblock]}"
+                                  IsChecked="{Binding WarnBeforeUnblock}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Steam path -->
+                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{Binding Loc[settings.section.steamPath]}"/>
+                        <TextBox Style="{StaticResource DarkTextBoxStyle}" Text="{Binding SteamPath, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Folders -->
+                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{Binding Loc[settings.section.folders]}"/>
+                        <ItemsControl ItemsSource="{Binding Folders}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:FolderBlockTarget}">
+                                    <Border Background="{StaticResource SurfaceElevatedBrush}" CornerRadius="{StaticResource ControlRadius}"
+                                            Padding="10,8" Margin="0,3">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding Path}" Style="{StaticResource CaptionTextStyle}" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="{Binding Loc[settings.emptyList]}" Style="{StaticResource CaptionTextStyle}" Margin="0,6,0,0"
+                                   Visibility="{Binding Folders.Count, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Standalone EXE files -->
+                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{Binding Loc[settings.section.exeFiles]}"/>
+                        <ItemsControl ItemsSource="{Binding Executables}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:ExeBlockTarget}">
+                                    <Border Background="{StaticResource SurfaceElevatedBrush}" CornerRadius="{StaticResource ControlRadius}"
+                                            Padding="10,8" Margin="0,3">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding Path}" Style="{StaticResource CaptionTextStyle}" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="{Binding Loc[settings.emptyList]}" Style="{StaticResource CaptionTextStyle}" Margin="0,6,0,0"
+                                   Visibility="{Binding Executables.Count, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Autostart -->
+                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{Binding Loc[settings.section.autostart]}"/>
+                        <CheckBox Style="{StaticResource DarkCheckBoxStyle}" Margin="0,4" Content="{Binding Loc[settings.startWithWindows]}"
+                                  IsChecked="{Binding StartWithWindows}"/>
+                        <CheckBox Style="{StaticResource DarkCheckBoxStyle}" Margin="0,4" Content="{Binding Loc[settings.startMinimizedToTray]}"
+                                  IsChecked="{Binding StartMinimizedToTray}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Testing & status -->
+                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{Binding Loc[settings.section.testing]}"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="{Binding Loc[common.testing]}" Command="{Binding TestCommand}"/>
+                        </Grid>
+
+                        <Border Background="{StaticResource SurfaceElevatedBrush}" CornerRadius="{StaticResource ControlRadius}" Padding="12">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <Ellipse Width="9" Height="9" Margin="0,0,8,0" VerticalAlignment="Center"
+                                             Fill="{Binding LastReport.OverallOutcome, Converter={StaticResource TestOutcomeToBrushConverter}}"/>
+                                    <TextBlock Text="{Binding StatusSummaryText}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding LastRunText}" Style="{StaticResource CaptionTextStyle}"/>
+                                <ItemsControl ItemsSource="{Binding LastReport.Checks}" Margin="0,8,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type models:DiagnosticCheckResult}">
+                                            <StackPanel Orientation="Horizontal" Margin="0,2">
+                                                <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                         Fill="{Binding Outcome, Converter={StaticResource TestOutcomeToBrushConverter}}"/>
+                                                <TextBlock Text="{Binding Name}" Style="{StaticResource CaptionTextStyle}" Margin="0,0,6,0"/>
+                                                <TextBlock Text="{Binding Message}" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Toast + Apply / Save / Cancel -->
+        <Grid Grid.Row="3" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Text="{Binding Toast}" Style="{StaticResource CaptionTextStyle}"
+                       Foreground="{StaticResource AccentOrangeBrush}" VerticalAlignment="Center"
+                       Visibility="{Binding Toast, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                        Content="{Binding Loc[common.cancel]}" Command="{Binding CancelCommand}"/>
+                <Button Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                        Content="{Binding Loc[common.apply]}" Command="{Binding ApplyCommand}"/>
+                <Button Style="{StaticResource PrimaryButtonStyle}"
+                        Content="{Binding Loc[common.save]}" Command="{Binding SaveCommand}"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

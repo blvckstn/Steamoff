@@ -1,0 +1,87 @@
+<Window x:Class="Steamoff.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:Steamoff.App.Converters"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d"
+        Title="{Binding Loc[app.title]}"
+        Width="380" Height="520" MinWidth="320" MinHeight="440"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BackgroundBrush}"
+        FontFamily="Segoe UI"
+        Closing="OnWindowClosing">
+    <Window.Resources>
+        <conv:HealthLevelToBrushConverter x:Key="HealthLevelToBrushConverter"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </Window.Resources>
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Grid Grid.Row="0" Margin="0,0,0,18">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Style="{StaticResource HeadingTextStyle}" Text="{Binding Loc[compact.title]}"/>
+                <TextBlock Style="{StaticResource SubheadingTextStyle}" Text="{Binding Loc[compact.subtitle]}" Margin="0,2,0,0"/>
+            </StackPanel>
+            <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Command="{Binding OpenSettingsCommand}"
+                    ToolTip="{Binding Loc[settings.title]}" Content="⚙" FontSize="18"/>
+        </Grid>
+
+        <!-- Status card -->
+        <Border Grid.Row="1" Style="{StaticResource CardStyle}" VerticalAlignment="Top">
+            <StackPanel>
+                <Border HorizontalAlignment="Center" Style="{StaticResource StatusPillStyle}" Margin="0,0,0,16">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center"
+                                 Fill="{Binding Level, Converter={StaticResource HealthLevelToBrushConverter}}"/>
+                        <TextBlock Text="{Binding StatusText}" Style="{StaticResource BodyTextStyle}"/>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="{Binding CoverageText}" FontSize="34" FontWeight="Bold"
+                           HorizontalAlignment="Center" Margin="0,0,0,4"
+                           Visibility="{Binding CoverageText, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                <Button Style="{StaticResource BigToggleButtonStyle}" Margin="0,16,0,16"
+                        Command="{Binding ToggleCommand}"
+                        Background="{Binding Level, Converter={StaticResource HealthLevelToBrushConverter}}">
+                    <TextBlock Text="{Binding ToggleButtonText}" Foreground="#1B1B1F" FontWeight="SemiBold" FontSize="18"/>
+                </Button>
+
+                <TextBlock Text="{Binding ModeText}" Style="{StaticResource CaptionTextStyle}" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Admin / firewall indicator -->
+        <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="0,16,0,0" Padding="14,12">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse Width="9" Height="9" Margin="0,0,10,0" VerticalAlignment="Center"
+                         Fill="{Binding HasAdminAccess, Converter={StaticResource HealthLevelToBrushConverter}}"/>
+                <TextBlock Text="{Binding AdminStatusText}" Style="{StaticResource BodyTextStyle}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Footer -->
+        <Grid Grid.Row="3" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Style="{StaticResource SecondaryButtonStyle}" HorizontalAlignment="Left"
+                    Content="{Binding Loc[compact.settingsButton]}" Command="{Binding OpenSettingsCommand}"/>
+            <TextBlock Grid.Column="1" Text="{Binding VersionText}" Style="{StaticResource CaptionTextStyle}"
+                       VerticalAlignment="Center"/>
+        </Grid>
+    </Grid>
+</Window>

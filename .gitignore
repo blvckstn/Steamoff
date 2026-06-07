@@ -1,0 +1,29 @@
+## .NET / Visual Studio
+bin/
+obj/
+out/
+publish/
+*.user
+*.suo
+.vs/
+
+## Test results
+TestResults/
+*.trx
+
+## Rider / VS Code
+.idea/
+.vscode/
+
+## OS
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+## AutoClaude local cache (not part of project source)
+.autoclaude/cache/
+.autoclaude/logs/
+
+## Settings/logs that may be produced at runtime if run from repo
+/settings.json
+/logs/
