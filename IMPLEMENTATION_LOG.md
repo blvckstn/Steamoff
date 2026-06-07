@@ -105,6 +105,18 @@ Final `dotnet test -c Release` (with the env vars):
 Пройден! : не пройдено 0, пройдено 33, пропущено 0, всего 33, длительность 192 ms.
 ```
 
+## `CS2012` file lock on re-run (stale build server, not a code issue)
+On a later verification run, `dotnet build -c Release` failed with
+`CS2012: Не удается открыть "...\obj\Release\net8.0-windows\refint\Steamoff.App.dll"
+для записи` ("being used by another process"). No `Steamoff.App.exe` was
+running (`Get-Process` showed only `dotnet`/`VBCSCompiler` background
+processes); a leftover Roslyn/MSBuild build-server from a prior session held
+the reference assembly open. Fix: `dotnet build-server shutdown` released the
+lock, and the rebuild then succeeded cleanly (0 errors, 1 pre-existing
+`WFAC010` warning). Re-running `dotnet test`/`dotnet publish` afterward
+reconfirmed **33/33 tests passing** and a successful single-file `win-x64`
+publish (`Steamoff.App.exe`, 161,852,037 bytes).
+
 ## `dotnet publish` argument quoting (shell quirk, not a project issue)
 `/p:PublishSingleFile=true` was being mis-parsed by the POSIX-style shell as
 a second project path (`MSB1008: можно указать только один проект`) because
