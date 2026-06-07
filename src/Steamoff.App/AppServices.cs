@@ -36,8 +36,9 @@ public sealed class AppServices
     public IExeTargetService ExeTargets { get; }
     public IStatusEvaluator StatusEvaluator { get; }
     public IAutostartService Autostart { get; }
-    public IDiagnosticsService Diagnostics { get; }
     public ILocalizationService Localization { get; }
+    public ILocalizedLogService LocalizedLog { get; }
+    public IDiagnosticsService Diagnostics { get; }
     public TrayService Tray { get; }
     public INotificationService Notifications { get; }
     public IDialogService Dialogs { get; }
@@ -57,8 +58,9 @@ public sealed class AppServices
         ExeTargets = new ExeTargetService();
         StatusEvaluator = new StatusEvaluator();
         Autostart = new TaskSchedulerAutostartService(Log);
-        Diagnostics = new DiagnosticsService(UserContext, Settings, Log, SteamDiscovery, Scanner, Firewall, Autostart);
         Localization = new LocalizationService(new LanguageManager(), new LocalizedStringProvider(), Log);
+        LocalizedLog = new LocalizedLogService(Log, Localization);
+        Diagnostics = new DiagnosticsService(UserContext, Settings, Log, SteamDiscovery, Scanner, Firewall, Autostart, Localization);
         Tray = new TrayService(Log, Localization);
         Notifications = new BalloonNotificationService(() => Tray.NotifyIconForNotifications);
         Dialogs = new WpfDialogService();

@@ -179,3 +179,197 @@ resolver delegate, no registry/COM access), and localization parity for the
 `LocalizationServiceTests.EveryShippedLanguage_HasNonEmptyTable_WithSameKeySetAsRussian`.
 See `specs/003-steamoff-settings-paths-ui-fixes/tasks.md` H3/H4/H6 and
 `KNOWN_LIMITATIONS.md`.
+
+## A17. `IsRestartRequired`/`RuntimeLanguage`/`SelectedLanguage` are derived, not stored
+The brief specified these as mutable `{ get; set; }` properties with an
+explicit state machine (Apply/Save/Cancel/Restart). Rather than adding three
+new pieces of independently-mutable state that could drift apart (and would
+duplicate the already-existing `_session.Draft.Language`/
+`ILocalizationService.CurrentLanguage`), they are exposed as **derived,
+read-only** values:
+- `RuntimeLanguage` = `ILocalizationService.CurrentLanguage.Code`
+- `SelectedLanguage` = `_session.Draft.Language`
+- `IsRestartRequired` = `LanguageRestartState.IsRestartRequired(SelectedLanguage, RuntimeLanguage)`
+  ⇔ the two codes differ (ordinal, case-insensitive)
+
+This single derived expression reproduces every transition the brief
+describes — including the subtle "Cancel resets `IsRestartRequired` to false
+unless other *persisted* pending changes remain" rule — for free, because
+`_session.Draft` after `DiscardDraft()` reflects the *last persisted* value,
+not "whatever the user most recently clicked." It is the safer production
+choice: fewer moving parts, impossible to desynchronize, zero persistence
+changes. See [specs/004-steamoff-localized-logs-release-flow/research.md](specs/004-steamoff-localized-logs-release-flow/research.md) R1
+and [contracts/language-restart.md](specs/004-steamoff-localized-logs-release-flow/contracts/language-restart.md).
+
+## A18. `ReleaseBuild*` log keys exist in localization tables but are not written via `ILocalizedLogService`
+`ReleaseBuildStarted/Completed/Failed` are translated into all 9 languages
+(the brief lists them among the ~30 events to template), but `build-release.ps1`
+writes its own plain-text, bilingual `release-log.txt` directly — a
+standalone PowerShell process has no running `ILocalizationService` instance
+and no `RuntimeLanguage` (that's a property of a *live Steamoff process*).
+The keys remain available — and parity-tested — for a hypothetical future
+in-app "trigger a release build" feature. See
+[specs/004-steamoff-localized-logs-release-flow/research.md](specs/004-steamoff-localized-logs-release-flow/research.md) R5.
+
+## A19. `build-release.ps1` may force-close Steamoff (unlike the human-in-the-loop choice in feature 003)
+During feature 003's publish, a running Steamoff instance (PID 148260) was
+deliberately *not* force-killed — that was a one-off interactive build where
+leaving the human in control was safer. Here the brief explicitly asks for
+an **automated** "terminate Steamoff if running" step (§7/§10), so
+`build-release.ps1` is allowed to `Stop-Process -Force` — but only after a
+soft-close attempt (`CloseMainWindow` + 3-5s wait), and only against
+processes that pass a strict double guard: name starts with `"Steamoff"`
+**and** `MainModule.FileName` resolves to a path inside Steamoff's own
+`bin\`/`release\`/`publish*\` trees. `steam.exe`/`steamwebhelper.exe`/any
+third-party or out-of-tree process can never match. See
+[specs/004-steamoff-localized-logs-release-flow/research.md](specs/004-steamoff-localized-logs-release-flow/research.md) R7
+and [contracts/release-build-flow.md](specs/004-steamoff-localized-logs-release-flow/contracts/release-build-flow.md) "Process safety".
+
+## A20. Publish output renamed to `Steamoff.exe` post-publish, `.csproj` untouched
+The brief's exact two-variant layout requires each output to be named
+`Steamoff.exe`, but `Steamoff.App.csproj`'s `<AssemblyName>` is
+`Steamoff.App` (and changing it would ripple into other path assumptions,
+shortcuts, and the existing single-file publish referenced throughout
+`README.md`/`FINAL_REPORT.md`). `build-release.ps1` therefore publishes
+normally (producing `Steamoff.App.exe`) and renames the single output file to
+`Steamoff.exe` inside each variant folder — a smaller, fully-reversible,
+script-local change that satisfies the brief's exact required filenames
+without touching the project's assembly identity. See
+[specs/004-steamoff-localized-logs-release-flow/contracts/release-build-flow.md](specs/004-steamoff-localized-logs-release-flow/contracts/release-build-flow.md)
+"Publish commands".
+
+## A21 — "Restart now" reuses `IElevationService.TryRelaunchElevated`
+
+`SettingsViewModel.RestartNowCommand` → `App.RestartApplication()` does not
+duplicate process-relaunch logic. It calls the existing
+`IElevationService.TryRelaunchElevated(arguments, out failureReason)`
+(`src/Steamoff.Infrastructure/UserContext/ElevationService.cs`), which already
+resolves `Process.GetCurrentProcess().MainModule.FileName`, builds a
+`ProcessStartInfo` with `UseShellExecute = true, Verb = "runas"`, preserves
+`Environment.GetCommandLineArgs()`, and handles `Win32Exception` (including
+UAC-cancel, error 1223) with localized failure reasons.
+
+**Why:** Steamoff always requires administrator rights to manage Defender
+Firewall rules — the app already shows a UAC prompt on every elevated launch,
+so "runas" on restart is not an *extra* prompt, it's the *same* one the user
+already expects. Writing a second, non-elevated relaunch path would (a) leave
+the relaunched instance under-privileged, requiring yet another elevation
+round-trip, and (b) duplicate argument-quoting/Win32-error-handling logic that
+is already implemented and exercised. Reuse keeps a single source of truth for
+"how Steamoff relaunches itself".
+
+**How to apply:** On success, `RestartApplication()` calls the existing
+`ExitApplication()` teardown path (`_settingsWindow?.Close()`,
+`_mainWindow?.Close()`, `Shutdown()` — which also disposes the tray via
+`OnExit`). On failure, it logs `LogEventKey.RestartFailed` with the returned
+`failureReason` and shows a balloon notification via `INotificationService`
+using the localized `settings.toast.restartFailed` string — the current
+instance is left running untouched, exactly as `contracts/language-restart.md`
+specifies.
+
+## A22 — `DiagnosticsSnapshot` field names spell out `CurrentLanguageCode`/`SelectedLanguageCode` rather than reusing the contract's `RuntimeLanguage`/`SelectedLanguage`
+
+`contracts/language-restart.md` defines `RuntimeLanguage` (=
+`_services.Localization.CurrentLanguage.Code`, the language the running
+process actually renders in) and `SelectedLanguage` (= `_session.Draft.Language`,
+the Settings-window draft pick, which can differ from both the runtime and the
+persisted value while the window is open). `DiagnosticsSnapshot` needs the
+*persisted* value — `settings.Language` — not the live draft, because the
+snapshot can be built from outside an open Settings window (e.g. "Copy
+diagnostics" from the journal, or a future CLI/background path) where no
+`SettingsEditSession`/`Draft` exists at all.
+
+**Why:** Reusing `SelectedLanguage` verbatim for a different underlying value
+(`settings.Language` vs `_session.Draft.Language`) would silently conflate two
+distinct concepts that the language-restart contract is careful to keep apart
+— a future reader skimming both documents would reasonably assume they're the
+same field. Spelling out `CurrentLanguageCode` (= contract's `RuntimeLanguage`)
+and `SelectedLanguageCode` (= contract's persisted `settings.Language`, *not*
+its `Draft.Language`) makes the snapshot's actual data source unambiguous from
+the property name alone, without requiring a cross-reference to the
+session-draft contract to disambiguate.
+
+**How to apply:** `DiagnosticsService.BuildSnapshotAsync` sets
+`CurrentLanguageCode = _localization.CurrentLanguage.Code` and
+`SelectedLanguageCode = settings.Language` (`DiagnosticsService.cs:99-100`).
+`IsRestartRequired` is computed from these two exactly as the contract's
+`IsRestartRequired` is from `RuntimeLanguage`/`SelectedLanguage`
+(`LanguageRestartState.IsRestartRequired`, ordinal case-insensitive
+comparison) — the *logic* is identical, only the snapshot's field names make
+explicit which of the contract's two language notions ("what's running" vs
+"what's persisted") each one captures.
+
+## A23 — `DiagnosticsService.LastReleaseBuildPath` reads a hardcoded absolute path to this checkout's `release\release-manifest.json`
+
+`DiagnosticsSnapshot.LastReleaseBuildPath` reports where the most recent
+`.\build-release.ps1` run wrote its output, for the "Diagnostics" panel and
+the extended report's `diagnostics.field.lastReleaseBuildPath` line. The brief
+fixes the release output location to `src/Steamoff.App/release/` *relative to
+this repository* (see A20/A24 and `contracts/release-build-flow.md`) — there
+is no per-machine settings key, environment variable, or discoverable
+manifest-search convention for it, and inventing one would be exactly the
+kind of speculative abstraction the brief says not to add ("не переписывай...
+исправляй поверх существующей архитектуры").
+
+**Why:** The only "honest" way to report a path that is contractually fixed
+to a specific location in *this* checkout is to hardcode that location and
+check whether a manifest actually exists there
+(`File.Exists(ReleaseManifestPath) ? Path.GetDirectoryName(...) : null` —
+`DiagnosticsService.cs:221-222`). Deriving it dynamically (e.g. walking up
+from `AppContext.BaseDirectory` looking for `Steamoff.slnx`, the way
+`ReleaseScriptTests.FindRepoRoot` does for test purposes) would be more
+"portable" in the abstract, but the published `Steamoff.exe` runs from
+`release\Steamoff-with-dotnet-runtime\`, far outside the source tree, where no
+such walk could ever resolve back to a development checkout — so the
+"portable" version would just always return `null` in the one binary users
+actually run, which is strictly worse than a value that is at least correct
+for the development/CI machine that builds and inspects it.
+
+**How to apply:** `ReleaseManifestPath` in `DiagnosticsService.cs:28` is a
+`private const string` literal pointing at
+`C:\Users\adm\Desktop\13\vibe\Steamoff\src\Steamoff.App\release\release-manifest.json`.
+`FindLastReleaseBuildPath()` returns `null` whenever that file is absent —
+exactly the expected, correct value on a fresh checkout or on an end-user
+machine running the published binary, where "no diagnostic info about a
+release build that was never produced on this machine" is the only honest
+answer. `DiagnosticsSnapshotTests.BuildSnapshotAsync_PopulatesAllFields_FromCollaborators`
+mirrors this same `File.Exists` check in its assertion (rather than assuming
+either presence or absence) so the test is correct in both states of a
+checkout — see `DiagnosticsSnapshotTests.cs:76-81` and the "Feature 004" entry
+in `IMPLEMENTATION_LOG.md`.
+
+## A24 — `Test-SteamoffManagedProcessPath` extracted as a named, self-test-able PowerShell function rather than left as an inline `Where-Object` predicate
+
+I5 (`tasks.md`) calls for the release-script's process-safety path-matching
+predicate to be "a pure function, extracted and tested in isolation". The
+predicate decides whether a candidate process's `MainModule.FileName` lies
+inside one of Steamoff's own build-output trees (`bin\`, `release\`,
+`publish*\`) — the path half of the "never touch Steam" double guard from
+`contracts/release-build-flow.md` "Process safety". `build-release.ps1` is
+PowerShell, and the project has no Pester/cross-language test harness, so a
+C# test cannot import or directly invoke a PowerShell function.
+
+**Why:** Two alternatives were rejected: (a) leaving the predicate as an
+inline `Where-Object { ... }` block (untestable from C#, and the brief
+explicitly calls it out as needing isolation testing), or (b) reimplementing
+the same matching logic in C# purely for test purposes (duplicating the rule
+in two languages — a maintenance hazard where the two copies could silently
+drift, exactly the kind of risk the project's existing whole-table parity
+tests for localization were written to prevent). Extracting the predicate
+into a named `function Test-SteamoffManagedProcessPath { param($Path,
+$RepoRoot) ... }` and exposing a `-TestProcessPath <path>` CLI parameter that
+evaluates it and exits lets the *real* production predicate run as a
+subprocess from `ReleaseScriptTests`, with zero duplicated logic and zero new
+test infrastructure.
+
+**How to apply:** `build-release.ps1` declares `[CmdletBinding()] param([string]
+$TestProcessPath)`; when the parameter is bound, it calls
+`Test-SteamoffManagedProcessPath -Path $TestProcessPath -RepoRoot $RepoRoot`,
+prints `True`/`False` to stdout, and exits 0 — without touching restore/build/
+test/publish at all (`build-release.ps1:14-23,63-66`). The main pipeline (step
+5, "find & close running Steamoff") calls the exact same function.
+`ReleaseScriptTests.InvokeScriptSelfTest` runs `powershell.exe -File
+build-release.ps1 -TestProcessPath "<candidate>"` as a subprocess and parses
+the trimmed stdout as a boolean (`ReleaseScriptTests.cs:134-141`), exercising
+both "accepts the three managed trees" and "rejects anything that looks like
+Steam or lies outside the repo" cases.

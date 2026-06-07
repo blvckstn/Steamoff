@@ -3,6 +3,11 @@ bin/
 obj/
 out/
 publish/
+
+## build-release.ps1 output (binaries + manifest, regenerated on every run —
+## see contracts/release-build-flow.md; release\ always holds the latest build
+## locally but is not meant to be version-controlled, like bin/obj/publish above)
+src/Steamoff.App/release/
 *.user
 *.suo
 .vs/
@@ -23,6 +28,11 @@ $RECYCLE.BIN/
 ## AutoClaude local cache (not part of project source)
 .autoclaude/cache/
 .autoclaude/logs/
+
+## Agent tooling/config dirs — local environment setup, not project source
+.autoclaude/
+.claude/
+.specify/
 
 ## Settings/logs that may be produced at runtime if run from repo
 /settings.json

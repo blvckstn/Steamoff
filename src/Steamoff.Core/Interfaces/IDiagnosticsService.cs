@@ -11,4 +11,10 @@ namespace Steamoff.Core.Interfaces;
 public interface IDiagnosticsService
 {
     Task<DiagnosticsReport> RunAsync(AppSettings settings, CancellationToken ct = default);
+
+    /// <summary>Builds the structured ~18-field snapshot behind the localized extended report (FR — diagnostics must display in the selected/runtime language).</summary>
+    Task<DiagnosticsSnapshot> BuildSnapshotAsync(CancellationToken ct = default);
+
+    /// <summary>Fully localized text report rendered from <see cref="BuildSnapshotAsync"/> — extends/replaces <see cref="ILogService.BuildDiagnosticsReportAsync"/> for the Settings journal / Compact "Copy diagnostics" actions.</summary>
+    Task<string> BuildExtendedReportAsync(CancellationToken ct = default);
 }

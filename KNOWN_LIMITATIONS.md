@@ -65,11 +65,27 @@ environment quirks of the dev machine that do not affect the shipped EXE.
   run in this session's automated pass (see `ASSUMPTIONS.md` A9).
 
 ## Packaging
-- **Self-contained single-file publish is large** (~162 MB `Steamoff.App.exe`)
-  because it bundles the entire .NET 8 Desktop runtime plus WPF/WinForms
-  assemblies. This is the correct trade-off for "the end user needs nothing
-  pre-installed" (see `ASSUMPTIONS.md` A1) but means the EXE is not a small
-  download — there is no trimmed/framework-dependent variant shipped.
+- **Self-contained build is large** (~68 MB `Steamoff.exe`, compressed
+  single-file — larger still uncompressed) because it bundles the entire
+  .NET 8 Desktop runtime plus WPF/WinForms assemblies. This is the correct
+  trade-off for "the end user needs nothing pre-installed" (see
+  `ASSUMPTIONS.md` A1). As of feature 004, `.\build-release.ps1` now also
+  produces a **framework-dependent** variant (`Steamoff-without-dotnet-
+  runtime/Steamoff.exe`, ~0.5 MB) for users who already have the .NET 8
+  Desktop Runtime installed — both ship side by side in `release\`, each with
+  its own `README-RUN.txt` explaining the trade-off and prerequisites. See
+  `contracts/release-build-flow.md` in
+  `specs/004-steamoff-localized-logs-release-flow/`.
+- **`DiagnosticsService.LastReleaseBuildPath` is hardcoded to this checkout's
+  absolute path** (`C:\Users\...\Steamoff\src\Steamoff.App\release\
+  release-manifest.json`, see `ASSUMPTIONS.md` A23). It correctly resolves on
+  the machine that runs `build-release.ps1`, and correctly reports `null`
+  (rendered as "n/a") on any other machine or in the published binary, where
+  no release was ever built locally — but it cannot discover a release built
+  in a *different* checkout location. This is intentional: the brief fixes
+  the release layout to a specific repo-relative path, and there is no
+  portable way to point a shipped, relocatable EXE back at its own build
+  provenance.
 
 ## ViewModels that depend on `AppServices` cannot be unit-tested as-is
 `SettingsViewModel`/`CompactViewModel` (and any other `AppServices`-backed

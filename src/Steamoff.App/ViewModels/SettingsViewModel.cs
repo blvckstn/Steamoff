@@ -2,10 +2,13 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Steamoff.App.Localization;
 using Steamoff.App.Services;
 using Steamoff.Core.Enums;
 using Steamoff.Core.Interfaces;
+using Steamoff.Core.Localization;
+using Steamoff.Core.Logging;
 using Steamoff.Core.Models;
 using Steamoff.Core.Mvvm;
 
@@ -19,22 +22,25 @@ namespace Steamoff.App.ViewModels;
 /// </summary>
 public sealed class SettingsViewModel : ObservableObject, IDisposable
 {
+    private const int JournalLineCount = 200;
+    private static readonly string[] JournalFilterTags = { string.Empty, "[ERROR]", "[WARN]", "[INFO]" };
+
     private readonly AppServices _services;
     private readonly IDialogService _dialogs;
-    private readonly AppLanguage _languageOnEntry;
+    private readonly DispatcherTimer _journalRefreshTimer;
     private SettingsEditSession _session;
     private DiagnosticsReport _lastReport = DiagnosticsReport.NotRunYet;
     private bool _isTesting;
     private bool _isDiscoveringSteamPath;
     private string? _toast;
     private SteamPathCheckResult _steamPathCheck = SteamPathCheckResult.Empty;
+    private int _journalFilterIndex;
 
     public SettingsViewModel(AppServices services, AppSettings savedSettings, IDialogService? dialogs = null)
     {
         _services = services;
         _dialogs = dialogs ?? services.Dialogs;
         _session = new SettingsEditSession(savedSettings);
-        _languageOnEntry = services.Localization.CurrentLanguage;
         Loc = new LocalizationProxy(services.Localization);
 
         Languages = new ObservableCollection<AppLanguage>(services.Localization.AvailableLanguages);
@@ -53,6 +59,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         ApplyCommand = new AsyncRelayCommand(() => CommitAsync(closeAfter: false));
         SaveCommand = new AsyncRelayCommand(() => CommitAsync(closeAfter: true));
         CancelCommand = new RelayCommand(Cancel);
+        RestartNowCommand = new AsyncRelayCommand(RestartNowAsync, () => IsRestartRequired);
 
         AddFolderCommand = new AsyncRelayCommand(AddFolderAsync);
         RemoveFolderCommand = new RelayCommand(p => RemoveFolder(p as FolderBlockTarget));
@@ -67,8 +74,24 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         AutoFindSteamCommand = new AsyncRelayCommand(AutoFindSteamAsync, () => !IsDiscoveringSteamPath);
         BrowseSteamFolderCommand = new RelayCommand(BrowseSteamFolder);
 
+        RefreshJournalCommand = new AsyncRelayCommand(() => RefreshJournalAsync());
+        OpenLogFolderCommand = new RelayCommand(OpenLogFolder);
+        CopyDiagnosticsCommand = new AsyncRelayCommand(CopyJournalDiagnosticsAsync);
+        ClearJournalDisplayCommand = new RelayCommand(ClearJournalDisplay);
+
         InitializeSteamPathCheck();
         _services.Localization.LanguageChanged += OnLanguageChanged;
+        _ = _services.LocalizedLog.LogAsync(LogEventKey.SettingsOpened);
+
+        RebuildJournalFilterOptions();
+        _journalRefreshTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(5)
+        };
+        _journalRefreshTimer.Tick += async (_, _) => await RefreshJournalAsync().ConfigureAwait(true);
+        _journalRefreshTimer.Start();
+
+        _ = RefreshJournalAsync();
     }
 
     private void OnLanguageChanged(object? sender, AppLanguage language)
@@ -76,15 +99,18 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(StatusSummaryText));
         OnPropertyChanged(nameof(LastRunText));
         OnPropertyChanged(nameof(SteamPathStatusText));
+        RebuildJournalFilterOptions();
     }
 
     public void Dispose()
     {
+        _journalRefreshTimer.Stop();
         _services.Localization.LanguageChanged -= OnLanguageChanged;
     }
 
     public event Action? CloseRequested;
     public event Action<AppSettings>? SettingsCommitted;
+    public event Action? RestartRequested;
 
     public LocalizationProxy Loc { get; }
 
@@ -97,6 +123,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public ICommand ApplyCommand { get; }
     public ICommand SaveCommand { get; }
     public ICommand CancelCommand { get; }
+    public AsyncRelayCommand RestartNowCommand { get; }
 
     public ICommand AddFolderCommand { get; }
     public ICommand RemoveFolderCommand { get; }
@@ -111,11 +138,16 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public ICommand AutoFindSteamCommand { get; }
     public ICommand BrowseSteamFolderCommand { get; }
 
+    public ICommand RefreshJournalCommand { get; }
+    public ICommand OpenLogFolderCommand { get; }
+    public ICommand CopyDiagnosticsCommand { get; }
+    public ICommand ClearJournalDisplayCommand { get; }
+
     public AppSettings Draft => _session.Draft;
 
     public AppLanguage SelectedLanguage
     {
-        get => Languages.FirstOrDefault(l => l.Code == _session.Draft.Language) ?? _languageOnEntry;
+        get => Languages.FirstOrDefault(l => l.Code == _session.Draft.Language) ?? _services.Localization.CurrentLanguage;
         set
         {
             if (value is null || value.Code == _session.Draft.Language)
@@ -124,10 +156,30 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             }
 
             _session.Draft.Language = value.Code;
-            _services.Localization.SetLanguage(value.Code);
             OnPropertyChanged();
+            OnPropertyChanged(nameof(SelectedLanguageCode));
+            OnPropertyChanged(nameof(IsRestartRequired));
+            RestartNowCommand.RaiseCanExecuteChanged();
+
+            if (IsRestartRequired)
+            {
+                _ = _services.LocalizedLog.LogAsync(LogEventKey.LanguageChangedRestartRequired, value.Code);
+            }
         }
     }
+
+    /// <summary>
+    /// The language the running process actually started in — fixed for the
+    /// process lifetime once <see cref="App"/>'s startup `SetLanguage` call
+    /// completes (Settings no longer live-previews language changes, FR-001/R2).
+    /// </summary>
+    public string RuntimeLanguage => _services.Localization.CurrentLanguage.Code;
+
+    /// <summary>The language currently chosen in the draft (persisted on Apply/Save).</summary>
+    public string SelectedLanguageCode => _session.Draft.Language;
+
+    /// <summary>True while the draft language differs from the runtime language — the app must restart to fully apply it.</summary>
+    public bool IsRestartRequired => LanguageRestartState.IsRestartRequired(SelectedLanguageCode, RuntimeLanguage);
 
     public bool BlockInbound
     {
@@ -264,6 +316,27 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _toast, value);
     }
 
+    /// <summary>Last <see cref="JournalLineCount"/> log lines, filtered by <see cref="JournalFilterIndex"/> — auto-refreshed every 5s while Settings is open.</summary>
+    public ObservableCollection<string> JournalLines { get; } = new();
+
+    /// <summary>Localized display labels for the filter selector (All/Errors/Warnings/Info), rebuilt on language change.</summary>
+    public ObservableCollection<string> JournalFilterOptions { get; } = new();
+
+    public bool HasJournalLines => JournalLines.Count > 0;
+
+    /// <summary>Index into <see cref="JournalFilterTags"/>/<see cref="JournalFilterOptions"/>: 0=All, 1=Errors, 2=Warnings, 3=Info.</summary>
+    public int JournalFilterIndex
+    {
+        get => _journalFilterIndex;
+        set
+        {
+            if (SetProperty(ref _journalFilterIndex, value))
+            {
+                _ = RefreshJournalAsync();
+            }
+        }
+    }
+
     private void SetDraft<T>(T newValue, Action<T> assign, T currentValue, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
     {
         if (EqualityComparer<T>.Default.Equals(newValue, currentValue))
@@ -295,7 +368,16 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         await PersistAsync(_session.Original).ConfigureAwait(true);
 
         SettingsCommitted?.Invoke(_session.Original);
-        Toast = closeAfter ? Loc["settings.toast.saved"] : Loc["settings.toast.applied"];
+        OnPropertyChanged(nameof(SelectedLanguageCode));
+        OnPropertyChanged(nameof(IsRestartRequired));
+        RestartNowCommand.RaiseCanExecuteChanged();
+
+        var restartPending = IsRestartRequired;
+        Toast = closeAfter
+            ? (restartPending ? Loc["settings.toast.savedRestartPending"] : Loc["settings.toast.saved"])
+            : (restartPending ? Loc["settings.toast.appliedRestartPending"] : Loc["settings.toast.applied"]);
+
+        await _services.LocalizedLog.LogAsync(closeAfter ? LogEventKey.SettingsSaved : LogEventKey.SettingsApplied).ConfigureAwait(true);
 
         if (closeAfter)
         {
@@ -307,23 +389,116 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         await _services.Settings.SaveAsync(settings).ConfigureAwait(true);
 
+        var wasInstalled = await _services.Autostart.IsInstalledAsync().ConfigureAwait(true);
+
         if (settings.StartWithWindows)
         {
             await _services.Autostart.InstallAsync(Environment.ProcessPath ?? AppContext.BaseDirectory).ConfigureAwait(true);
+            if (!wasInstalled)
+            {
+                await _services.LocalizedLog.LogAsync(LogEventKey.AutostartCreated).ConfigureAwait(true);
+            }
         }
         else
         {
             await _services.Autostart.UninstallAsync().ConfigureAwait(true);
+            if (wasInstalled)
+            {
+                await _services.LocalizedLog.LogAsync(LogEventKey.AutostartRemoved).ConfigureAwait(true);
+            }
         }
     }
 
     private void Cancel()
     {
         _session.DiscardDraft();
-        _services.Localization.SetLanguage(_languageOnEntry.Code);
         OnPropertyChanged(null);
+        RestartNowCommand.RaiseCanExecuteChanged();
         Toast = Loc["settings.toast.cancelled"];
+        _ = _services.LocalizedLog.LogAsync(LogEventKey.SettingsCancelled);
         CloseRequested?.Invoke();
+    }
+
+    private async Task RestartNowAsync()
+    {
+        if (_session.HasChanges)
+        {
+            await CommitAsync(closeAfter: false).ConfigureAwait(true);
+        }
+
+        await _services.LocalizedLog.LogAsync(LogEventKey.RestartRequested).ConfigureAwait(true);
+        RestartRequested?.Invoke();
+    }
+
+    // ===================== Journal (in-Settings log panel) =====================
+
+    private void RebuildJournalFilterOptions()
+    {
+        var selectedIndex = _journalFilterIndex;
+
+        JournalFilterOptions.Clear();
+        JournalFilterOptions.Add(Loc["settings.journal.filter.all"]);
+        JournalFilterOptions.Add(Loc["settings.journal.filter.errors"]);
+        JournalFilterOptions.Add(Loc["settings.journal.filter.warnings"]);
+        JournalFilterOptions.Add(Loc["settings.journal.filter.info"]);
+
+        _journalFilterIndex = Math.Clamp(selectedIndex, 0, JournalFilterOptions.Count - 1);
+        OnPropertyChanged(nameof(JournalFilterIndex));
+    }
+
+    private async Task RefreshJournalAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var lines = await _services.Log.ReadLastLinesAsync(JournalLineCount, ct).ConfigureAwait(true);
+            var tag = JournalFilterTags[Math.Clamp(_journalFilterIndex, 0, JournalFilterTags.Length - 1)];
+
+            JournalLines.Clear();
+            foreach (var line in lines)
+            {
+                if (tag.Length == 0 || line.Contains(tag, StringComparison.Ordinal))
+                {
+                    JournalLines.Add(line);
+                }
+            }
+
+            OnPropertyChanged(nameof(HasJournalLines));
+        }
+        catch (IOException)
+        {
+            // The log file may be momentarily locked by a concurrent write — skip this refresh tick.
+        }
+    }
+
+    private void OpenLogFolder()
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(_services.Log.LogFilePath);
+            if (!string.IsNullOrEmpty(directory) && Directory.Exists(directory))
+            {
+                Process.Start(new ProcessStartInfo(directory) { UseShellExecute = true });
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            _services.Log.Warning($"Не удалось открыть папку с логами: {ex.Message}");
+        }
+    }
+
+    private async Task CopyJournalDiagnosticsAsync()
+    {
+        var report = await _services.Diagnostics.BuildExtendedReportAsync().ConfigureAwait(true);
+        System.Windows.Clipboard.SetText(report);
+        Toast = Loc["compact.miniLog.copied"];
+        await _services.LocalizedLog.LogAsync(LogEventKey.DiagnosticsCopied).ConfigureAwait(true);
+    }
+
+    private void ClearJournalDisplay()
+    {
+        JournalLines.Clear();
+        OnPropertyChanged(nameof(HasJournalLines));
+        Toast = Loc["settings.journal.cleared"];
     }
 
     // ===================== Additional Folders =====================
@@ -375,6 +550,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             _session.Draft.AdditionalFolders.Add(folder);
             Folders.Add(folder);
             OnPropertyChanged(nameof(SteamPath));
+            await _services.LocalizedLog.LogAsync(LogEventKey.FolderAdded, folder.Path).ConfigureAwait(true);
         }
         catch (ArgumentException ex)
         {
@@ -392,6 +568,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _services.FolderTargets.RemoveFolder(folder.Id);
         _session.Draft.AdditionalFolders.RemoveAll(f => f.Id == folder.Id);
         Folders.Remove(folder);
+        _ = _services.LocalizedLog.LogAsync(LogEventKey.FolderRemoved, folder.Path);
     }
 
     private async Task RescanFolderAsync(FolderBlockTarget? folder)
@@ -452,7 +629,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             var exe = _services.ExeTargets.Create(normalized, displayName: null);
             _session.Draft.AdditionalExecutables.Add(exe);
             Executables.Add(exe);
-            await Task.CompletedTask;
+            await _services.LocalizedLog.LogAsync(LogEventKey.ExeAdded, exe.Path).ConfigureAwait(true);
         }
         catch (ArgumentException ex)
         {
@@ -469,6 +646,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
         _session.Draft.AdditionalExecutables.RemoveAll(e => e.Id == exe.Id);
         Executables.Remove(exe);
+        _ = _services.LocalizedLog.LogAsync(LogEventKey.ExeRemoved, exe.Path);
     }
 
     private void CheckExeStatus(ExeBlockTarget? exe)
@@ -553,6 +731,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private async Task AutoFindSteamAsync()
     {
         IsDiscoveringSteamPath = true;
+        await _services.LocalizedLog.LogAsync(LogEventKey.SteamAutoSearchStarted).ConfigureAwait(true);
         try
         {
             var installation = await _services.SteamDiscovery.DiscoverAsync().ConfigureAwait(true);
@@ -564,10 +743,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                 _session.Draft.SteamPath = result.NormalizedFolderPath;
                 OnPropertyChanged(nameof(SteamPath));
                 Toast = Loc["settings.steamPath.found"];
+                await _services.LocalizedLog.LogAsync(LogEventKey.SteamAutoSearchSucceeded, result.NormalizedFolderPath).ConfigureAwait(true);
             }
             else
             {
                 Toast = Loc["settings.steamPath.notFoundAuto"];
+                await _services.LocalizedLog.LogAsync(LogEventKey.SteamAutoSearchFailed).ConfigureAwait(true);
             }
         }
         finally
@@ -618,6 +799,15 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             : trimmed;
 
         OnPropertyChanged(nameof(SteamPath));
+
+        if (result.IsValid && result.NormalizedFolderPath is not null && !string.Equals(trimmed, result.NormalizedFolderPath, StringComparison.OrdinalIgnoreCase))
+        {
+            _ = _services.LocalizedLog.LogAsync(LogEventKey.SteamPathNormalized, trimmed, result.NormalizedFolderPath);
+        }
+        else if (!result.IsValid)
+        {
+            _ = _services.LocalizedLog.LogAsync(LogEventKey.SteamPathInvalid, trimmed);
+        }
     }
 
     /// <summary>Re-runs validation against the current draft value — wired to the Steam-path field's LostFocus in the View (spec section 4: "validation triggers... focus-lost").</summary>

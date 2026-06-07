@@ -161,3 +161,61 @@ was re-run with a separate output directory (`-o publish-output`), which
 succeeded. The temporary `publish-output` directory (a build artifact, not
 user data) was deleted afterward with `rm -rf publish-output` to avoid
 leaving stray output outside the normal `bin/.../publish/` location.
+
+## Feature 004 (localized logs & release flow) — test suite + release pipeline run
+
+Six new test files were added covering I1–I6 from
+`specs/004-steamoff-localized-logs-release-flow/tasks.md`
+(`LanguageRestartStateTests`, `LocalizedLogServiceTests`,
+`SettingsActionLogEventsTests`, `DiagnosticsSnapshotTests`,
+`LocalizationKeyGroupParityTests`, `ReleaseScriptTests`), raising the suite
+from 53 to **112 tests**.
+
+First compile/run surfaced three issues, all fixed in place:
+- `ReleaseScriptTests.cs` used `Path`/`File`/`Directory`/`DirectoryInfo`
+  without `using System.IO;` (CS0103/CS0246) — added the `using`.
+- `DiagnosticsSnapshotTests.cs` constructed `UserContextInfo` without its
+  three `required` members `Sid`/`IsAdministrator`/`IsElevated` (CS9035) —
+  supplied fake values (`Sid = "S-1-5-21-...-1001"`, both flags `true`).
+- `BuildSnapshotAsync_PopulatesAllFields_FromCollaborators` asserted
+  `snapshot.LastReleaseBuildPath` is always `null`, on the wrong assumption
+  that no `release-manifest.json` exists at `DiagnosticsService`'s hardcoded
+  path (see A23) in a fresh checkout — but `build-release.ps1` had already
+  populated it earlier in this same session, making the assertion
+  environment-dependent and flaky. Fixed by mirroring the production
+  `File.Exists` check in the assertion itself, so the test is correct in
+  both states.
+
+Final `dotnet test -c Release` (with `DOTNET_ROLL_FORWARD=LatestMajor`/
+`DOTNET_ROLL_FORWARD_TO_PRERELEASE=1`, per A9):
+```
+Пройден!   : не пройдено 0, пройдено 112, пропущено 0, всего 112, длительность 2 s.
+```
+
+### `build-release.ps1` full pipeline run (`.\build-release.ps1` from repo root)
+
+```
+[...] dotnet restore — OK (6s)
+[...] dotnet build -c Release — OK (9s), 0 ошибок / 0 errors
+[...] dotnet test — OK, 112/112 пройдено / 112/112 passed (5s)
+[...] не найден работающий Steamoff / no running Steamoff found
+[...] Папка release очищена и пересоздана. / Release folder cleaned and recreated.
+[...] publish (self-contained) — OK (14s) -> .../Steamoff-with-dotnet-runtime/Steamoff.exe
+       (68.4 MB, sha256=ACB58CDE3291A11113F9FC2F2F31A91FFE9A0FBDD84B5C2DF1DD79D91B1D29BC)
+[...] publish (framework-dependent) — OK (7s) -> .../Steamoff-without-dotnet-runtime/Steamoff.exe
+       (0.5 MB, sha256=58183B5C493A56906B029A2EF0C7E29525030F0C12FE7A0005EBA0966CAEA5AD)
+[...] release-manifest.json записан / written
+[...] === Сборка релиза завершена успешно / Release build completed successfully ===
+```
+
+`release\` now always contains the exact two-variant layout the brief
+requires (`Steamoff-with-dotnet-runtime/`, `Steamoff-without-dotnet-runtime/`,
+each with `Steamoff.exe` + `README-RUN.txt`, plus `release-manifest.json` and
+`release-log.txt`, no stray `.pdb`/publish artifacts).
+
+**Bug caught and fixed before commit:** the `dotnet test` log line in
+`build-release.ps1` originally hardcoded `"53/53 пройдено / 53/53 passed"` —
+a leftover from when the suite had 53 tests. Replaced with a regex extraction
+of the actual `всего N`/`Total: N` count from `dotnet test`'s own summary
+line, so the logged figure (now correctly `112/112`) always tracks the real
+suite size instead of silently going stale on the next test addition.

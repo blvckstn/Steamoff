@@ -1,9 +1,11 @@
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Threading;
 using Steamoff.App.Localization;
 using Steamoff.App.ViewModels;
 using Steamoff.App.Views;
+using Steamoff.Core.Logging;
 using Steamoff.Core.Models;
 
 namespace Steamoff.App;
@@ -55,6 +57,7 @@ public partial class App : System.Windows.Application
 
         _settings = await services.Settings.LoadAsync().ConfigureAwait(true);
         services.Localization.SetLanguage(_settings.Language);
+        await services.LocalizedLog.LogAsync(LogEventKey.AppStarted).ConfigureAwait(true);
 
         if (!_settings.IsFirstLaunchCompleted)
         {
@@ -134,11 +137,13 @@ public partial class App : System.Windows.Application
 
         var viewModel = new SettingsViewModel(_services, _settings);
         viewModel.SettingsCommitted += OnSettingsCommitted;
+        viewModel.RestartRequested += RestartApplication;
 
         _settingsWindow = new SettingsWindow(viewModel);
         _settingsWindow.Closed += (_, _) =>
         {
             viewModel.SettingsCommitted -= OnSettingsCommitted;
+            viewModel.RestartRequested -= RestartApplication;
             _settingsWindow = null;
             ShowMainWindow();
         };
@@ -177,6 +182,32 @@ public partial class App : System.Windows.Application
         Shutdown();
     }
 
+    /// <summary>
+    /// "Restart now": relaunches Steamoff with the same command-line arguments
+    /// and tears the current instance down. Reuses <see cref="IElevationService.TryRelaunchElevated"/>
+    /// rather than duplicating the relaunch mechanism — Steamoff always needs
+    /// admin rights for firewall management, so the "runas" UAC prompt it
+    /// triggers is the same one the app already requires on every launch, not
+    /// an extra one (recorded as ASSUMPTIONS.md A21).
+    /// </summary>
+    private void RestartApplication()
+    {
+        if (_services is null)
+        {
+            return;
+        }
+
+        var arguments = Environment.GetCommandLineArgs().Skip(1).ToList();
+        if (_services.Elevation.TryRelaunchElevated(arguments, out var failureReason))
+        {
+            ExitApplication();
+            return;
+        }
+
+        _ = _services.LocalizedLog.LogAsync(LogEventKey.RestartFailed, failureReason ?? "unknown");
+        _services.Notifications.Show("Steamoff", _services.Localization.GetString("settings.toast.restartFailed"));
+    }
+
     private static HealthStatus BuildHealthSnapshot(MainWindow window) => new()
     {
         Level = window.ViewModel.Level,
@@ -198,6 +229,11 @@ public partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         IsExiting = true;
+        if (_services is not null)
+        {
+            _services.LocalizedLog.LogAsync(LogEventKey.AppClosed).GetAwaiter().GetResult();
+        }
+
         _mainWindow?.ViewModel.Dispose();
         _services?.Tray.Dispose();
         _singleInstanceMutex?.ReleaseMutex();

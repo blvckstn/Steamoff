@@ -5,6 +5,8 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Steamoff.App.Localization;
 using Steamoff.Core.Enums;
+using Steamoff.Core.Localization;
+using Steamoff.Core.Logging;
 using Steamoff.Core.Models;
 using Steamoff.Core.Mvvm;
 using Clipboard = System.Windows.Clipboard;
@@ -121,6 +123,9 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
 
     public bool IsBlocked => _settings.DesiredState == DesiredState.Blocked;
 
+    /// <summary>True when the persisted language differs from the running process's language — mirrors <see cref="ViewModels.SettingsViewModel.IsRestartRequired"/> (no <see cref="Core.Models.SettingsEditSession"/> here, so it's derived straight from <see cref="AppServices"/>).</summary>
+    public bool IsRestartRequired => LanguageRestartState.IsRestartRequired(_settings.Language, _services.Localization.CurrentLanguage.Code);
+
     public string StatusText => _status.Overall switch
     {
         OverallStatus.FullyBlocked => Loc["compact.statusBlocked"],
@@ -172,6 +177,7 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(AdminStatusText));
         OnPropertyChanged(nameof(VersionText));
         OnPropertyChanged(nameof(ExpandLogButtonText));
+        OnPropertyChanged(nameof(IsRestartRequired));
     }
 
     public async Task RefreshRecentLogLinesAsync(CancellationToken ct = default)
@@ -208,9 +214,10 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
 
     private async Task CopyDiagnosticsAsync()
     {
-        var report = await _services.Log.BuildDiagnosticsReportAsync().ConfigureAwait(true);
+        var report = await _services.Diagnostics.BuildExtendedReportAsync().ConfigureAwait(true);
         Clipboard.SetText(report);
         _services.Notifications.Show(Loc["compact.miniLog.title"], Loc["compact.miniLog.copied"]);
+        await _services.LocalizedLog.LogAsync(LogEventKey.DiagnosticsCopied).ConfigureAwait(true);
     }
 
     public void UpdateSettings(AppSettings settings)
@@ -220,6 +227,7 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsBlocked));
         OnPropertyChanged(nameof(ModeText));
         OnPropertyChanged(nameof(ToggleButtonText));
+        OnPropertyChanged(nameof(IsRestartRequired));
     }
 
     public void UpdateUserContext(UserContextInfo userContext)
@@ -247,7 +255,13 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
                 ? await _services.Firewall.GetCurrentStateAsync(ct).ConfigureAwait(true)
                 : ActualFirewallState.Empty;
 
+            var wasDrifting = _status.Overall == OverallStatus.DriftDetected;
             Status = _services.StatusEvaluator.Evaluate(desired, actual, _userContext, _settings.AdditionalFolders, _settings.AdditionalExecutables);
+
+            if (Status.Overall == OverallStatus.DriftDetected && !wasDrifting)
+            {
+                await _services.LocalizedLog.LogAsync(LogEventKey.DriftDetected).ConfigureAwait(true);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Core.Exceptions.FirewallOperationException)
         {
@@ -271,12 +285,16 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
 
             if (newState == DesiredState.Blocked)
             {
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallBlockStarted).ConfigureAwait(true);
                 await _services.Firewall.ApplyBlockAsync(targets, _settings.DirectionMode).ConfigureAwait(true);
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallBlockCompleted).ConfigureAwait(true);
                 _services.Notifications.Show(Loc["notification.blockedTitle"], Loc["notification.blockedBody"]);
             }
             else
             {
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallUnblockStarted).ConfigureAwait(true);
                 await _services.Firewall.RemoveOrDisableAsync(targets, _settings.RuleCleanupMode).ConfigureAwait(true);
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallUnblockCompleted).ConfigureAwait(true);
                 _services.Notifications.Show(Loc["notification.unblockedTitle"], Loc["notification.unblockedBody"]);
             }
 
@@ -289,6 +307,9 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Core.Exceptions.FirewallOperationException)
         {
             _services.Log.Error("Не удалось переключить состояние блокировки Steam.", ex);
+            await _services.LocalizedLog.LogAsync(
+                _settings.DesiredState == DesiredState.Blocked ? LogEventKey.FirewallUnblockFailed : LogEventKey.FirewallBlockFailed,
+                ex.Message).ConfigureAwait(true);
             Status = new HealthStatus
             {
                 Level = HealthLevel.Error,

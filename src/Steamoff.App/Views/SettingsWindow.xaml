@@ -17,6 +17,7 @@
         <conv:TestOutcomeToBrushConverter x:Key="TestOutcomeToBrushConverter"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <conv:PathCheckStatusToBrushConverter x:Key="PathCheckStatusToBrushConverter"/>
+        <conv:LogLineContainsConverter x:Key="LogLineContainsConverter"/>
 
         <Style x:Key="SectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextStyle}">
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -87,6 +88,18 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
+
+                <Grid Margin="0,10,0,0" Visibility="{Binding IsRestartRequired, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Style="{StaticResource CaptionTextStyle}" Foreground="{StaticResource WarningBrush}"
+                               TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="{Binding Loc[settings.language.restartWarning]}"/>
+                    <Button Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}" Margin="12,0,0,0"
+                            Content="{Binding Loc[settings.button.restartNow]}" Command="{Binding RestartNowCommand}"/>
+                </Grid>
             </StackPanel>
         </Border>
 
@@ -333,6 +346,74 @@
                                 </ItemsControl>
                             </StackPanel>
                         </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Journal / Log -->
+                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,14">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Style="{StaticResource SectionHeaderStyle}" Margin="0"
+                                       Text="{Binding Loc[settings.journal.title]}"/>
+                            <ComboBox Grid.Column="1" Width="170"
+                                      Background="{StaticResource SurfaceElevatedBrush}"
+                                      Foreground="{StaticResource TextPrimaryBrush}"
+                                      BorderBrush="{StaticResource BorderDarkBrush}"
+                                      ItemsSource="{Binding JournalFilterOptions}"
+                                      SelectedIndex="{Binding JournalFilterIndex}"/>
+                        </Grid>
+
+                        <Border Background="{StaticResource SurfaceElevatedBrush}" CornerRadius="{StaticResource ControlRadius}"
+                                BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="1" Padding="10,8" MinHeight="160" MaxHeight="260">
+                            <Grid>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                                              Visibility="{Binding HasJournalLines, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <ItemsControl ItemsSource="{Binding JournalLines}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="11" TextWrapping="NoWrap">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource BodyTextStyle}">
+                                                            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Converter={StaticResource LogLineContainsConverter}, ConverterParameter=[ERROR]}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{StaticResource RedStatusBrush}"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Converter={StaticResource LogLineContainsConverter}, ConverterParameter=[WARN]}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{StaticResource WarningBrush}"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Converter={StaticResource LogLineContainsConverter}, ConverterParameter=[INFO]}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{StaticResource GreenStatusBrush}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+
+                                <TextBlock Text="{Binding Loc[settings.journal.empty]}" Style="{StaticResource CaptionTextStyle}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Visibility="{Binding HasJournalLines, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                                    Content="{Binding Loc[settings.journal.refresh]}" Command="{Binding RefreshJournalCommand}"/>
+                            <Button Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                                    Content="{Binding Loc[settings.journal.openFolder]}" Command="{Binding OpenLogFolderCommand}"/>
+                            <Button Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                                    Content="{Binding Loc[settings.journal.copyDiagnostics]}" Command="{Binding CopyDiagnosticsCommand}"/>
+                            <Button Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="{Binding Loc[settings.journal.clearDisplay]}" Command="{Binding ClearJournalDisplayCommand}"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </StackPanel>

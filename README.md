@@ -102,6 +102,37 @@ The published EXE lands in
 Run it elevated (it will prompt for UAC on its own) — Defender Firewall rule
 management requires Administrator rights.
 
+## Producing a release build (`build-release.ps1`)
+Run from the repo root (it verifies `Steamoff.slnx` exists in the working
+directory and refuses to run anywhere else):
+```powershell
+.\build-release.ps1
+```
+This single script runs the full release pipeline end to end: `dotnet
+restore`/`build -c Release`/`test -c Release` (with the `DOTNET_ROLL_FORWARD`
+workaround already set internally), closes any currently-running `Steamoff`
+instance it finds under its own `bin\`/`release\`/`publish*\` trees (it never
+touches `steam.exe` or anything outside the repo — see ASSUMPTIONS.md A19/A24),
+cleans and recreates `src/Steamoff.App/release/`, and publishes **both**
+required variants there:
+
+```
+src/Steamoff.App/release/
+  Steamoff-with-dotnet-runtime/      Steamoff.exe + README-RUN.txt   (self-contained, ~68 MB)
+  Steamoff-without-dotnet-runtime/   Steamoff.exe + README-RUN.txt   (framework-dependent, ~0.5 MB)
+  release-manifest.json              versions, sizes, SHA-256 hashes of both outputs
+  release-log.txt                    timestamped, bilingual (RU/EN) pipeline log
+```
+
+`release\` always contains the **latest** build only — every run empties and
+repopulates it from scratch (see ASSUMPTIONS.md A20/A23 for why the output is
+named `Steamoff.exe` and where `release-manifest.json` lives). The script
+exits non-zero and writes an `ОШИБКА`/`ERROR` line to the log on the first
+failing step (wrong working directory, failing tests, build errors, a stuck
+running instance, etc.) — see `contracts/release-build-flow.md` in
+`specs/004-steamoff-localized-logs-release-flow/` for the exact contract this
+script implements, and `ReleaseScriptTests.cs` for its automated coverage.
+
 ## Settings & data location
 `%ProgramData%\Steamoff\settings.json` (or `%AppData%\Steamoff\settings.json`
 as a fallback). The file is versioned (`CurrentVersion`); older files are
@@ -113,7 +144,12 @@ migrated in place on load — see `ASSUMPTIONS.md` A3/A14 and
 - `IMPLEMENTATION_LOG.md` — every build error hit and how it was fixed
 - `KNOWN_LIMITATIONS.md` — honest current limitations
 - `FINAL_REPORT.md` — end-to-end reports for the localization/settings
-  feature (002) and the settings-paths/UI-fixes feature (003)
+  feature (002), the settings-paths/UI-fixes feature (003), and the
+  localized-logs/release-flow feature (004)
+- `specs/004-steamoff-localized-logs-release-flow/` — SpecKit spec/plan/
+  research/data-model/quickstart/tasks/contracts for the language-restart
+  state machine, localized logging (journal panel + 14 settings actions),
+  localized diagnostics, and the `build-release.ps1` release pipeline
 - `specs/003-steamoff-settings-paths-ui-fixes/` — SpecKit spec/plan/research/
   data-model/quickstart/tasks/contracts for the Settings paths (Steam path,
   Folders, EXE Files), drag&drop, mini-log, and UI-fixes feature

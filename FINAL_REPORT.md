@@ -313,3 +313,133 @@ points 10 above) were committed on top of the existing `master` branch
 with a single, non-amending commit, and pushed with a plain
 `git push origin master` — **no force push**. See the commit hash and push
 output recorded at the end of this session's conversation / `git log`.
+
+# FINAL REPORT — Feature 004: Localized Logs & Release Flow
+
+Scope: `specs/004-steamoff-localized-logs-release-flow/`. Twelve-point
+summary per the governing brief ("Работай строго через SpecKit. Не
+переписывай проект с нуля. Исправляй текущую реализацию поверх существующей
+архитектуры. Вопросы не задавай.").
+
+## 1. Baseline check
+The repo built and tested cleanly at the start of this session (feature 003's
+53/53 passing baseline, `master` already pushed). No baseline repair was
+needed; proceeded straight to the six-task-group breakdown.
+
+## 2. Language-change-requires-restart state machine
+`LanguageRestartState.IsRestartRequired(selected, runtime)` — a pure, static,
+ordinal case-insensitive comparison — backs `IsRestartRequired` everywhere it
+is shown (Settings warning banner, "Restart now" enable/disable, the
+diagnostics snapshot's pending-restart notice). Exactly mirrors the 7-row
+state table in `contracts/language-restart.md` (open / pick / pick-original /
+apply / save / cancel / restart). "Restart now" reuses the existing
+`IElevationService.TryRelaunchElevated` rather than duplicating relaunch
+logic (`ASSUMPTIONS.md` A21).
+
+## 3. Localized logging core + 14 settings actions wired
+`LocalizedLogService` wraps `ILogService`/`ILocalizationService`: resolves a
+`LogEventKey` to its `log.event.*` localization key via `LogEventTemplates`
+(which also declares each event's `LogLevel` — Info/Warning/Error), formats
+template arguments, and dispatches to the matching `ILogService.LogXAsync`.
+`SettingsViewModel` now calls it at all 14 action sites (open / apply / save /
+cancel / folder add+remove / exe add+remove / Steam-path normalized+invalid /
+autostart created+removed / diagnostics-copied / restart-failed) — see exact
+call-site line numbers cross-referenced in `SettingsActionLogEventsTests.cs`'s
+XML doc.
+
+## 4. Logs/Journal panel in Settings
+A new "Журнал"/"Journal" panel inside the Settings View shows the live log
+tail with level-based filtering (all/errors/warnings/info), refresh, "open
+log folder", "copy diagnostics", and "clear display" — all chrome localized
+through new `settings.journal.*` keys (11 keys × 9 languages).
+
+## 5. Diagnostics in selected/runtime language
+`IDiagnosticsService`/`DiagnosticsService` gained `BuildSnapshotAsync`/
+`BuildExtendedReportAsync`, producing a structured, language-independent
+`DiagnosticsSnapshot` record (~18 fields: app version, current/selected
+language codes — see `ASSUMPTIONS.md` A22 for the naming-conflict resolution
+versus the contract's `RuntimeLanguage`/`SelectedLanguage` — restart-required
+flag, Windows user/elevation, settings/log paths, Steam path + validity,
+folder/exe counts, firewall desired/actual state, drift status, autostart
+status, last test result, last release build path) rendered entirely through
+`diagnostics.field.*`/`diagnostics.outcome.*`/`diagnostics.report.*`
+localization templates (58 `diagnostics.*` keys total).
+
+## 6. `build-release.ps1` — final build always saved to `release\`
+A new 12-step pipeline script at the repo root implements
+`contracts/release-build-flow.md` exactly: verify root → restore → build →
+test (with the `DOTNET_ROLL_FORWARD` workaround set internally, A9) → find &
+gracefully-then-forcefully close any running `Steamoff` (strict name+path
+double guard, never touches Steam — A19) → empty-and-recreate `release\` in
+place (Windows directory-handle-lock workaround, see `IMPLEMENTATION_LOG.md`)
+→ publish self-contained (`Steamoff-with-dotnet-runtime/`, ~68 MB) → publish
+framework-dependent (`Steamoff-without-dotnet-runtime/`, ~0.5 MB) → rename
+each to `Steamoff.exe` and strip stray `.pdb`s (A20) → write per-variant
+`README-RUN.txt` → compute SHA-256/sizes and write `release-manifest.json` →
+write the bilingual `release-log.txt` → exit 0/1. The process-safety path
+predicate was extracted into a named, isolation-testable function exposed via
+a `-TestProcessPath` self-test CLI hook (A24) rather than duplicated in C#.
+
+## 7. Tests added (112 total, up from 53)
+Six new files covering I1–I6 from `tasks.md`:
+- `LanguageRestartStateTests` (6) — the full 7-row state-machine table plus
+  ordinal case-insensitive comparison
+- `LocalizedLogServiceTests` (4) — key resolution, level dispatch, argument
+  formatting, and the unknown-language fallback chain
+- `SettingsActionLogEventsTests` (7) — all 7 representative action categories
+  exercised through the real `LocalizedLogService` seam (`AppServices` itself
+  remains untestable per A16 — ViewModel call sites reviewed by inspection)
+- `DiagnosticsSnapshotTests` (3 + 6 inline fakes) — field completeness,
+  localized field-label rendering (RU vs EN), pending-restart notice
+- `LocalizationKeyGroupParityTests` (4, several `[Theory]`) — every
+  `log.event.*`/`diagnostics.*`/`settings.journal.*` key resolves, non-empty,
+  in all 9 shipped languages
+- `ReleaseScriptTests` (6) — manifest JSON shape/round-trip, README-RUN
+  variant content, the process-path-guard predicate (via `-TestProcessPath`
+  subprocess invocation), and the fail-fast-outside-repo-root contract
+
+## 8. `dotnet test` results
+```
+Пройден!   : не пройдено 0, пройдено 112, пропущено 0, всего 112, длительность 2 s.
+```
+112/112 passing — see `IMPLEMENTATION_LOG.md` "Feature 004" for the three
+compile/assertion issues hit on first run (missing `using System.IO;`,
+`UserContextInfo` required-member fakes, and an environment-dependent
+`LastReleaseBuildPath` assertion) and how each was fixed.
+
+## 9. `build-release.ps1` full pipeline run
+```
+dotnet restore — OK | dotnet build -c Release — OK, 0 errors
+dotnet test — OK, 112/112 passed
+no running Steamoff found
+release\ cleaned and recreated
+publish (self-contained)        -> Steamoff-with-dotnet-runtime/Steamoff.exe       (68.4 MB, sha256=ACB58CDE...)
+publish (framework-dependent)   -> Steamoff-without-dotnet-runtime/Steamoff.exe    (0.5 MB,  sha256=58183B5C...)
+release-manifest.json written
+=== Release build completed successfully ===
+```
+A pre-existing bug was caught and fixed before commit: the script's
+`dotnet test` log line hardcoded `"53/53"` from when the suite had 53 tests;
+it now extracts the real count from `dotnet test`'s own summary line via
+regex, so it tracks the suite size automatically (`112/112` now, and whatever
+it grows to next).
+
+## 10. Documentation updated
+- `ASSUMPTIONS.md` — new entries **A22** (`DiagnosticsSnapshot` field-naming
+  resolution vs. the language-restart contract's `RuntimeLanguage`/
+  `SelectedLanguage`), **A23** (hardcoded `LastReleaseBuildPath`, and why a
+  "portable" path-discovery scheme would be strictly worse), **A24**
+  (`Test-SteamoffManagedProcessPath` extraction + `-TestProcessPath` self-test
+  hook)
+- `IMPLEMENTATION_LOG.md` — new "Feature 004" section: the three
+  compile/assertion fixes, the 112/112 `dotnet test` results, the full
+  `build-release.ps1` pipeline run, and the hardcoded-"53/53" bug fix
+- `KNOWN_LIMITATIONS.md` — updated "Packaging" (both release variants now
+  ship; sizes corrected) and added a note on `LastReleaseBuildPath`'s
+  hardcoded-path limitation (mirrors A23)
+- `README.md` — new "Producing a release build (`build-release.ps1`)"
+  section (usage, output layout, contract reference), feature 004 added to
+  the documentation index and `specs/` list
+- `FINAL_REPORT.md` — this section
+- `specs/004-steamoff-localized-logs-release-flow/tasks.md` — all completed
+  items checked off
