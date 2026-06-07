@@ -6,7 +6,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         mc:Ignorable="d"
         Title="{Binding Loc[app.title]}"
-        Width="380" Height="520" MinWidth="320" MinHeight="440"
+        Width="380" Height="700" MinWidth="320" MinHeight="520"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BackgroundBrush}"
         FontFamily="Segoe UI"
@@ -14,13 +14,15 @@
     <Window.Resources>
         <conv:HealthLevelToBrushConverter x:Key="HealthLevelToBrushConverter"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <conv:LogLineContainsConverter x:Key="LogLineContainsConverter"/>
     </Window.Resources>
 
     <Grid Margin="22">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*" MinHeight="120"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -72,8 +74,75 @@
             </StackPanel>
         </Border>
 
+        <!-- Mini-log -->
+        <Border Grid.Row="3" Style="{StaticResource CardStyle}" Margin="0,16,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Style="{StaticResource SectionHeaderStyle}" Margin="0"
+                               Text="{Binding Loc[compact.miniLog.title]}"/>
+                    <Button Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}" Padding="10,4"
+                            Content="{Binding ExpandLogButtonText}" Command="{Binding ExpandLogCommand}"/>
+                </Grid>
+
+                <Border Grid.Row="1" Background="{StaticResource SurfaceElevatedBrush}" CornerRadius="{StaticResource ControlRadius}"
+                        BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="1" Padding="10,8" MinHeight="80">
+                    <Grid>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                                      Visibility="{Binding HasRecentLogLines, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <ItemsControl ItemsSource="{Binding RecentLogLines}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="11" TextWrapping="NoWrap">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource BodyTextStyle}">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Converter={StaticResource LogLineContainsConverter}, ConverterParameter=[ERROR]}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource RedStatusBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Converter={StaticResource LogLineContainsConverter}, ConverterParameter=[WARNING]}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource WarningBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Converter={StaticResource LogLineContainsConverter}, ConverterParameter=[INFO]}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource GreenStatusBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <TextBlock Text="{Binding Loc[compact.miniLog.empty]}" Style="{StaticResource CaptionTextStyle}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="{Binding HasRecentLogLines, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0"
+                            Visibility="{Binding IsLogExpanded, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Button Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                            Content="{Binding Loc[compact.miniLog.openFull]}" Command="{Binding OpenFullLogCommand}"/>
+                    <Button Style="{StaticResource SecondaryButtonStyle}"
+                            Content="{Binding Loc[compact.miniLog.copyDiagnostics]}" Command="{Binding CopyDiagnosticsCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Footer -->
-        <Grid Grid.Row="3" Margin="0,16,0,0">
+        <Grid Grid.Row="4" Margin="0,16,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>

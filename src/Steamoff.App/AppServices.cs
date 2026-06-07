@@ -6,10 +6,12 @@ using Steamoff.Infrastructure.Diagnostics;
 using Steamoff.Infrastructure.Firewall;
 using Steamoff.Infrastructure.Logging;
 using Steamoff.Infrastructure.Notifications;
+using Steamoff.Infrastructure.Paths;
 using Steamoff.Infrastructure.Scanning;
 using Steamoff.Infrastructure.Settings;
 using Steamoff.Infrastructure.Steam;
 using Steamoff.Infrastructure.UserContext;
+using Steamoff.App.Services;
 using Steamoff.App.Tray;
 
 namespace Steamoff.App;
@@ -27,6 +29,8 @@ public sealed class AppServices
     public ISettingsService Settings { get; }
     public IFirewallService Firewall { get; }
     public ISteamDiscoveryService SteamDiscovery { get; }
+    public IPathNormalizationService PathNormalization { get; }
+    public ISteamPathValidator SteamPathValidator { get; }
     public ITargetScanner Scanner { get; }
     public IFolderTargetService FolderTargets { get; }
     public IExeTargetService ExeTargets { get; }
@@ -36,6 +40,7 @@ public sealed class AppServices
     public ILocalizationService Localization { get; }
     public TrayService Tray { get; }
     public INotificationService Notifications { get; }
+    public IDialogService Dialogs { get; }
 
     public AppServices()
     {
@@ -45,6 +50,8 @@ public sealed class AppServices
         Settings = new JsonSettingsService(Log);
         Firewall = new ComFirewallService(Log);
         SteamDiscovery = new SteamDiscoveryService(Log);
+        PathNormalization = new PathNormalizationService();
+        SteamPathValidator = new SteamPathValidator(PathNormalization);
         Scanner = new TargetScanner(Log);
         FolderTargets = new FolderTargetService(Scanner, Log);
         ExeTargets = new ExeTargetService();
@@ -54,5 +61,6 @@ public sealed class AppServices
         Localization = new LocalizationService(new LanguageManager(), new LocalizedStringProvider(), Log);
         Tray = new TrayService(Log, Localization);
         Notifications = new BalloonNotificationService(() => Tray.NotifyIconForNotifications);
+        Dialogs = new WpfDialogService();
     }
 }

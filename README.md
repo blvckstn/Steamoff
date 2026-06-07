@@ -14,7 +14,15 @@ through the same COM API the Defender UI itself uses, and nothing else.
   helper processes, etc. — discovered from the registry
   `HKCU/HKLM\Software\Valve\Steam`).
 - **Custom targets**: add your own folders or individual `.exe` files to the
-  same on/off switch.
+  same on/off switch — via picker dialogs **or by dragging and dropping**
+  files/folders/`.lnk` shortcuts straight onto the Settings cards. Every path
+  goes through the same normalize → validate → de-duplicate pipeline
+  (handles quotes, env vars, `/` vs `\`, duplicated separators, UNC paths,
+  and `.lnk` resolution) and shows a live green/red/yellow/gray status
+  indicator — see `specs/003-steamoff-settings-paths-ui-fixes/`.
+- **Mini-log in the compact view**: the last 30 log lines, color-coded by
+  level, refreshed every 5 seconds, with one-click "open full log" and "copy
+  diagnostics report" actions.
 - **Live status verification**: Steamoff doesn't just remember "I created a
   rule" — it re-reads the actual current Defender Firewall rule state every
   time, so the displayed status always reflects reality (including if you or
@@ -71,7 +79,8 @@ tests/Steamoff.Tests/         xUnit tests + fakes (FakeLogService,
                               FakeLocalizationService) in TestSupport/
 specs/                        SpecKit docs:
                               001-steamoff-smart-firewall-switch (core app)
-                              002-steamoff-localization-settings (this feature)
+                              002-steamoff-localization-settings
+                              003-steamoff-settings-paths-ui-fixes (this feature)
 steamOff.ps1                  legacy reference script (kept untouched, never
                               invoked by the app — see ASSUMPTIONS.md A6)
 ```
@@ -103,7 +112,11 @@ migrated in place on load — see `ASSUMPTIONS.md` A3/A14 and
 - `ASSUMPTIONS.md` — every autonomous design decision, with rationale
 - `IMPLEMENTATION_LOG.md` — every build error hit and how it was fixed
 - `KNOWN_LIMITATIONS.md` — honest current limitations
-- `FINAL_REPORT.md` — end-to-end report for the localization/settings feature
+- `FINAL_REPORT.md` — end-to-end reports for the localization/settings
+  feature (002) and the settings-paths/UI-fixes feature (003)
+- `specs/003-steamoff-settings-paths-ui-fixes/` — SpecKit spec/plan/research/
+  data-model/quickstart/tasks/contracts for the Settings paths (Steam path,
+  Folders, EXE Files), drag&drop, mini-log, and UI-fixes feature
 - `specs/002-steamoff-localization-settings/` — SpecKit spec/plan/research/
   data-model/quickstart/tasks/contracts for the localization feature
 - `specs/001-steamoff-smart-firewall-switch/` — SpecKit docs for the core app

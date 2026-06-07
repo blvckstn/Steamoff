@@ -155,3 +155,27 @@ catch missing keys in any other language (including English). The
 first-launch dialog also defaults to Russian on dismissal, for the same
 reason. See
 [specs/002-steamoff-localization-settings/research.md](specs/002-steamoff-localization-settings/research.md) R5.
+
+## A16. No new `SettingsViewModel`/`CompactViewModel`/UI-smoke tests for feature 003
+`AppServices` is a concrete `sealed class` with a parameterless constructor
+that eagerly constructs real platform services (`FileLogService`,
+`JsonSettingsService`, `ComFirewallService`, `TrayService`/`NotifyIcon`, COM
+shortcut resolution, etc.) — there is no fakeable seam (no interface, no DI
+container, no internal test-only constructor), and a grep of the existing
+suite confirms **zero** tests construct `AppServices` or any
+`AppServices`-dependent ViewModel today. Adding seam-free tests for
+`SettingsViewModel`/`CompactViewModel`/a `SettingsWindow`-opens-once UI smoke
+test would force one of: (a) writing real files to the user's AppData/registry
+from a "unit" test, or (b) threading ~18 constructor parameters through a new
+internal test-only `AppServices` constructor (plus `InternalsVisibleTo`) —
+both are out-of-scope architecture changes for a brief that explicitly says
+"fix the UI, preserve the App/Core/Infrastructure/Tests architecture, don't
+rewrite from scratch." Decision: covered the new logic at the layer where it
+*is* seam-friendly instead — `PathNormalizationService`/`SteamPathValidator`
+got 20 focused unit tests (`PathNormalizationServiceTests`,
+`SteamPathValidatorTests`, real temp-directory trees + a fake shortcut
+resolver delegate, no registry/COM access), and localization parity for the
+~33 new keys is already exercised end-to-end by the existing
+`LocalizationServiceTests.EveryShippedLanguage_HasNonEmptyTable_WithSameKeySetAsRussian`.
+See `specs/003-steamoff-settings-paths-ui-fixes/tasks.md` H3/H4/H6 and
+`KNOWN_LIMITATIONS.md`.

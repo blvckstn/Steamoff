@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Reflection;
 using System.Windows.Input;
@@ -6,6 +7,7 @@ using Steamoff.App.Localization;
 using Steamoff.Core.Enums;
 using Steamoff.Core.Models;
 using Steamoff.Core.Mvvm;
+using Clipboard = System.Windows.Clipboard;
 
 namespace Steamoff.App.ViewModels;
 
@@ -17,13 +19,17 @@ namespace Steamoff.App.ViewModels;
 /// </summary>
 public sealed class CompactViewModel : ObservableObject, IDisposable
 {
+    private const int MiniLogLineCount = 30;
+
     private readonly AppServices _services;
     private readonly DispatcherTimer _refreshTimer;
+    private readonly DispatcherTimer _logRefreshTimer;
 
     private AppSettings _settings;
     private HealthStatus _status = HealthStatus.Unknown;
     private UserContextInfo _userContext;
     private bool _isBusy;
+    private bool _isLogExpanded;
 
     public CompactViewModel(AppServices services, AppSettings settings, UserContextInfo userContext)
     {
@@ -34,6 +40,9 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
 
         ToggleCommand = new AsyncRelayCommand(ToggleAsync, () => !IsBusy && _userContext.HasFirewallAccess);
         OpenSettingsCommand = new RelayCommand(() => SettingsRequested?.Invoke());
+        ExpandLogCommand = new RelayCommand(() => IsLogExpanded = !IsLogExpanded);
+        OpenFullLogCommand = new RelayCommand(OpenFullLog);
+        CopyDiagnosticsCommand = new AsyncRelayCommand(CopyDiagnosticsAsync);
 
         _services.Localization.LanguageChanged += OnLanguageChanged;
 
@@ -43,6 +52,15 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         };
         _refreshTimer.Tick += async (_, _) => await RefreshStatusAsync().ConfigureAwait(true);
         _refreshTimer.Start();
+
+        _logRefreshTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(5)
+        };
+        _logRefreshTimer.Tick += async (_, _) => await RefreshRecentLogLinesAsync().ConfigureAwait(true);
+        _logRefreshTimer.Start();
+
+        _ = RefreshRecentLogLinesAsync();
     }
 
     public event Action? SettingsRequested;
@@ -51,6 +69,27 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
 
     public ICommand ToggleCommand { get; }
     public ICommand OpenSettingsCommand { get; }
+    public ICommand ExpandLogCommand { get; }
+    public ICommand OpenFullLogCommand { get; }
+    public ICommand CopyDiagnosticsCommand { get; }
+
+    public ObservableCollection<string> RecentLogLines { get; } = new();
+
+    public bool IsLogExpanded
+    {
+        get => _isLogExpanded;
+        set
+        {
+            if (SetProperty(ref _isLogExpanded, value))
+            {
+                OnPropertyChanged(nameof(ExpandLogButtonText));
+            }
+        }
+    }
+
+    public string ExpandLogButtonText => IsLogExpanded ? Loc["compact.miniLog.collapse"] : Loc["compact.miniLog.expand"];
+
+    public bool HasRecentLogLines => RecentLogLines.Count > 0;
 
     public bool IsBusy
     {
@@ -132,6 +171,46 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ModeText));
         OnPropertyChanged(nameof(AdminStatusText));
         OnPropertyChanged(nameof(VersionText));
+        OnPropertyChanged(nameof(ExpandLogButtonText));
+    }
+
+    public async Task RefreshRecentLogLinesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var lines = await _services.Log.ReadLastLinesAsync(MiniLogLineCount, ct).ConfigureAwait(true);
+
+            RecentLogLines.Clear();
+            foreach (var line in lines)
+            {
+                RecentLogLines.Add(line);
+            }
+
+            OnPropertyChanged(nameof(HasRecentLogLines));
+        }
+        catch (IOException)
+        {
+            // The log file may be momentarily locked by a concurrent write — skip this refresh tick.
+        }
+    }
+
+    private void OpenFullLog()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(_services.Log.LogFilePath) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
+        {
+            _services.Log.Error("Не удалось открыть файл лога.", ex);
+        }
+    }
+
+    private async Task CopyDiagnosticsAsync()
+    {
+        var report = await _services.Log.BuildDiagnosticsReportAsync().ConfigureAwait(true);
+        Clipboard.SetText(report);
+        _services.Notifications.Show(Loc["compact.miniLog.title"], Loc["compact.miniLog.copied"]);
     }
 
     public void UpdateSettings(AppSettings settings)
@@ -226,6 +305,7 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _refreshTimer.Stop();
+        _logRefreshTimer.Stop();
         _services.Localization.LanguageChanged -= OnLanguageChanged;
     }
 }

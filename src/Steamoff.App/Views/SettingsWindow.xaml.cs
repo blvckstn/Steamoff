@@ -2,6 +2,9 @@ using System.ComponentModel;
 using System.Windows;
 using Steamoff.App.Tray;
 using Steamoff.App.ViewModels;
+using DragEventArgs = System.Windows.DragEventArgs;
+using DataFormats = System.Windows.DataFormats;
+using DragDropEffects = System.Windows.DragDropEffects;
 
 namespace Steamoff.App.Views;
 
@@ -26,6 +29,13 @@ public partial class SettingsWindow : Window
             viewModel.CloseRequested -= OnCloseRequested;
             viewModel.Dispose();
         };
+
+        SteamPathDropZone.Drop += OnSteamPathDrop;
+        SteamPathDropZone.PreviewDragOver += OnDragOverCopyEffect;
+        FoldersDropZone.Drop += OnFoldersDrop;
+        FoldersDropZone.PreviewDragOver += OnDragOverCopyEffect;
+        ExeDropZone.Drop += OnExeDrop;
+        ExeDropZone.PreviewDragOver += OnDragOverCopyEffect;
     }
 
     public SettingsViewModel ViewModel => (SettingsViewModel)DataContext;
@@ -48,5 +58,56 @@ public partial class SettingsWindow : Window
         e.Cancel = true;
         _closingViaViewModel = true;
         ViewModel.CancelCommand.Execute(null);
+    }
+
+    private void OnSteamPathLostFocus(object sender, RoutedEventArgs e) => ViewModel.RevalidateSteamPath();
+
+    private static void OnDragOverCopyEffect(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnSteamPathDrop(object sender, DragEventArgs e)
+    {
+        var path = GetFirstDroppedPath(e);
+        if (path is not null)
+        {
+            ViewModel.ApplySteamPathCandidate(path);
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnFoldersDrop(object sender, DragEventArgs e)
+    {
+        var path = GetFirstDroppedPath(e);
+        if (path is not null)
+        {
+            _ = ViewModel.AddFolderFromPathAsync(path);
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnExeDrop(object sender, DragEventArgs e)
+    {
+        var path = GetFirstDroppedPath(e);
+        if (path is not null)
+        {
+            _ = ViewModel.AddExeFromPathAsync(path);
+        }
+
+        e.Handled = true;
+    }
+
+    private static string? GetFirstDroppedPath(DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } files)
+        {
+            return files[0];
+        }
+
+        return null;
     }
 }

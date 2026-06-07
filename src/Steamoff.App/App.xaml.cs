@@ -67,6 +67,7 @@ public partial class App : System.Windows.Application
         var userContext = services.UserContext.GetCurrentContext();
         _mainWindow = new MainWindow(new CompactViewModel(services, _settings, userContext));
         MainWindow = _mainWindow;
+        _mainWindow.ViewModel.SettingsRequested += OpenSettings;
 
         if (!_settings.StartMinimizedToTray)
         {

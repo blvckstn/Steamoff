@@ -70,3 +70,21 @@ environment quirks of the dev machine that do not affect the shipped EXE.
   assemblies. This is the correct trade-off for "the end user needs nothing
   pre-installed" (see `ASSUMPTIONS.md` A1) but means the EXE is not a small
   download — there is no trimmed/framework-dependent variant shipped.
+
+## ViewModels that depend on `AppServices` cannot be unit-tested as-is
+`SettingsViewModel`/`CompactViewModel` (and any other `AppServices`-backed
+ViewModel) have no automated coverage of their own — `AppServices` is a
+concrete `sealed class` with a parameterless constructor that eagerly builds
+real platform services (`FileLogService`, `JsonSettingsService`,
+`ComFirewallService`, `TrayService`/`NotifyIcon`, COM shortcut resolution),
+with no interface, DI container, or test-only constructor to substitute
+fakes. The existing suite (53 tests after feature 003) already had zero tests
+of this shape for the same reason. Introducing one would require either
+writing real files to the user's AppData/registry from a "unit" test, or an
+out-of-scope refactor (an internal ~18-parameter test constructor plus
+`InternalsVisibleTo`) — both rejected for a UI-fix feature whose brief says
+"preserve the architecture, don't rewrite." The new path-handling logic that
+*can* be isolated (`PathNormalizationService`, `SteamPathValidator`) has full
+unit coverage instead (20 tests, real temp directories + a fake shortcut
+resolver, no registry/COM access). See `ASSUMPTIONS.md` A16 and
+`specs/003-steamoff-settings-paths-ui-fixes/tasks.md` H3/H4/H6.

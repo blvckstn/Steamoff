@@ -53,6 +53,33 @@ public sealed class FolderBlockTarget
     public FolderStatus Status { get; set; } = FolderStatus.Disabled;
 }
 
+/// <summary>
+/// Outcome of normalizing and validating a user-supplied Steam-path candidate
+/// (typed path, dropped file, dialog pick, or auto-discovery result) — see
+/// <c>IPathNormalizationService</c>/<c>ISteamPathValidator</c> and spec section 4.
+/// </summary>
+public sealed class SteamPathCheckResult
+{
+    /// <summary>The folder path to persist as <c>AppSettings.SteamPath</c> (never an .exe path).</summary>
+    public string? NormalizedFolderPath { get; init; }
+
+    /// <summary>Full path to steam.exe inside <see cref="NormalizedFolderPath"/>, when valid.</summary>
+    public string? SteamExePath { get; init; }
+
+    public required PathCheckStatus Status { get; init; }
+
+    /// <summary>Localization key for the human-readable status text shown next to the indicator.</summary>
+    public required string StatusMessageKey { get; init; }
+
+    public bool IsValid => Status == PathCheckStatus.Valid;
+
+    public static SteamPathCheckResult Empty { get; } = new()
+    {
+        Status = PathCheckStatus.Empty,
+        StatusMessageKey = "settings.steamPath.dropHint"
+    };
+}
+
 /// <summary>User-managed standalone executable tracked as a firewall target. Steamoff only ever reads its path — never executes it.</summary>
 public sealed class ExeBlockTarget
 {

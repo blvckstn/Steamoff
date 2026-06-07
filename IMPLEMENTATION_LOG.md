@@ -128,3 +128,36 @@ succeeded:
 Steamoff.App -> .../bin/Release/net8.0-windows/win-x64/publish/
 ```
 producing a single ~162 MB self-contained `Steamoff.App.exe`.
+
+## Feature 003 (settings paths & UI fixes) — pipeline run
+
+**No `Steamoff.sln` exists** (only `Steamoff.slnx`, the new XML solution
+format) — `dotnet build/test Steamoff.sln` fails immediately with `MSB1009:
+Файл проекта не существует`. Same as in feature 002: build/test/publish
+target the individual `.csproj` files directly
+(`src/Steamoff.App/Steamoff.App.csproj`,
+`tests/Steamoff.Tests/Steamoff.Tests.csproj`).
+
+Pipeline results (with `DOTNET_ROLL_FORWARD=LatestMajor`/
+`DOTNET_ROLL_FORWARD_TO_PRERELEASE=1` for `dotnet test`, per A9):
+```
+dotnet test   -c Debug   → Passed!  - Failed: 0, Passed: 53, Skipped: 0, Total: 53
+dotnet build  -c Release → Build succeeded (0 errors)
+dotnet publish -c Release -r win-x64 --self-contained true
+               -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+               → Steamoff.App.exe (single-file, self-contained, ~122 MB)
+```
+The new 20 tests (`PathNormalizationServiceTests` ×8,
+`SteamPathValidatorTests` ×12) are included in the 53/53 total alongside the
+33 pre-existing tests from feature 002.
+
+**Publish file lock (running instance, not a code issue):** the first
+`dotnet publish` attempt failed with `UnauthorizedAccessException: Access to
+the path '...\Steamoff.App.exe' is denied` — a previously-published
+`Steamoff.App` process (PID 148260) was running and held its own executable
+open for write. Per the project's "don't disrupt the user's own running app
+instance" guidance, the process was **not** force-killed; instead the publish
+was re-run with a separate output directory (`-o publish-output`), which
+succeeded. The temporary `publish-output` directory (a build artifact, not
+user data) was deleted afterward with `rm -rf publish-output` to avoid
+leaving stray output outside the normal `bin/.../publish/` location.

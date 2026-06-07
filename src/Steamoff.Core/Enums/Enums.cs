@@ -108,3 +108,31 @@ public enum DiscoverySource
     Shortcut,
     Manual
 }
+
+/// <summary>
+/// Result classification for a normalized/validated Steam-path candidate —
+/// drives the validity indicator color and status text in Settings (spec section 4).
+/// </summary>
+public enum PathCheckStatus
+{
+    /// <summary>Nothing entered yet — indicator shown in neutral/gray.</summary>
+    Empty,
+
+    /// <summary>Entered but not yet (re-)validated — indicator shown in yellow.</summary>
+    Unchecked,
+
+    /// <summary>Resolved to a folder containing steam.exe — indicator shown in green.</summary>
+    Valid,
+
+    /// <summary>The path doesn't exist on disk.</summary>
+    PathNotFound,
+
+    /// <summary>The folder exists but no steam.exe was found inside it.</summary>
+    SteamExeNotFound,
+
+    /// <summary>An .exe was selected/dropped, but its name isn't steam.exe.</summary>
+    WrongExe,
+
+    /// <summary>A shortcut (.lnk) was provided but its target couldn't be resolved.</summary>
+    ShortcutUnresolved
+}

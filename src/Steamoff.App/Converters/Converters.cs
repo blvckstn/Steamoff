@@ -59,6 +59,30 @@ public sealed class HealthLevelToBrushConverter : IValueConverter
         throw new NotSupportedException();
 }
 
+/// <summary>Maps a Steam-path validation status to the indicator brush (spec section 4 color contract: green=valid, red=invalid, yellow=unchecked, gray=empty).</summary>
+public sealed class PathCheckStatusToBrushConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object parameter, CultureInfo culture)
+    {
+        var key = value switch
+        {
+            PathCheckStatus.Valid => "GreenStatusBrush",
+            PathCheckStatus.Unchecked => "WarningBrush",
+            PathCheckStatus.Empty => "GrayStatusBrush",
+            PathCheckStatus.PathNotFound
+                or PathCheckStatus.SteamExeNotFound
+                or PathCheckStatus.WrongExe
+                or PathCheckStatus.ShortcutUnresolved => "RedStatusBrush",
+            _ => "GrayStatusBrush"
+        };
+
+        return Application.Current.TryFindResource(key) as Brush ?? Brushes.Gray;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 /// <summary>Maps a TestOutcome to one of the theme's status brushes.</summary>
 public sealed class TestOutcomeToBrushConverter : IValueConverter
 {
@@ -74,6 +98,16 @@ public sealed class TestOutcomeToBrushConverter : IValueConverter
 
         return Application.Current.TryFindResource(key) as Brush ?? Brushes.Gray;
     }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>Checks whether a log line (e.g. "{timestamp} [{level}] {message}") contains the substring given as ConverterParameter — drives mini-log color-coding by level.</summary>
+public sealed class LogLineContainsConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object parameter, CultureInfo culture) =>
+        value is string line && parameter is string needle && line.Contains(needle, StringComparison.Ordinal);
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
