@@ -152,22 +152,23 @@ src/Steamoff.App/bin/Release/net8.0-windows/win-x64/publish/Steamoff.App.exe
 ```
 
 ## 9. Push status
-The repository (`origin = https://github.com/blvckstn/Steamoff`) currently
-has **zero commits** — `git log` reports `your current branch 'master' does
-not have any commits yet`, and everything is untracked. This session's work
-(feature 001 baseline + feature 002 localization, including this report) is
-being committed as the **first commit** to the repo. Per the governing
-constraint, **no force push** is used; if a normal `git push -u origin
-master` fails (e.g. due to auth or branch-protection), the exact command and
-error will be recorded here / in `IMPLEMENTATION_LOG.md` for the user to
-complete manually with their own credentials:
+The repository (`origin = https://github.com/blvckstn/Steamoff`) had **zero
+commits** at the start of this session — `git log` reported `your current
+branch 'master' does not have any commits yet`, and everything was untracked.
+This session's work (feature 001 baseline + feature 002 localization,
+including this report and all SpecKit/assumptions/limitations docs) was
+committed as the repo's **first / root commit**:
+```
+git commit -m "Initial commit: Steamoff smart firewall switch with localization & settings ..."
+→ [master (root-commit) 6c752b3] 105 files changed, 9628 insertions(+)
+```
+Per the governing constraint, **no force push** was used — a plain
+`git push -u origin master` was attempted and **succeeded**:
 ```
 git push -u origin master
+→ branch 'master' set up to track 'origin/master'.
+→ To https://github.com/blvckstn/Steamoff
+→  * [new branch]      master -> master
 ```
-(Status of this push — success or the exact failure — is appended below once
-attempted.)
-
----
-**Push result**: _(filled in immediately after the commit step of this
-session — see the final messages of the conversation / `git log` for the
-authoritative current state)._
+**Result: pushed successfully.** `master` now tracks `origin/master` at
+commit `6c752b3`. No manual follow-up is required.
