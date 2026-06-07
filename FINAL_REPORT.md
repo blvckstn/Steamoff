@@ -443,3 +443,14 @@ it grows to next).
 - `FINAL_REPORT.md` — this section
 - `specs/004-steamoff-localized-logs-release-flow/tasks.md` — all completed
   items checked off
+
+## 11. Push status
+Committed on top of `master` as `6383aa7` ("Feature 004: Localized logs,
+settings journal, diagnostics, and release flow" — 47 files changed, 4599
+insertions, 63 deletions, single non-amending commit). The local branch is a
+plain fast-forward of `origin/master`; run `git push origin master` to
+publish (no force-push required).
+
+## 12. Final summary
+See the end-of-session message in this conversation for the consolidated
+12-point report the brief requires (§15).

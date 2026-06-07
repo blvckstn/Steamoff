@@ -121,4 +121,4 @@ Status legend: [x] done · [ ] pending
 - [x] J4. Update `README.md`, `FINAL_REPORT.md`, `IMPLEMENTATION_LOG.md`,
       `KNOWN_LIMITATIONS.md`, `ASSUMPTIONS.md` (A17-A20+)
 - [ ] J5. `git add` / commit / push (no force-push)
-- [ ] J6. Final summary report (brief §15, 12 points) appended to `FINAL_REPORT.md`
+- [x] J6. Final summary report (brief §15, 12 points) appended to `FINAL_REPORT.md`
