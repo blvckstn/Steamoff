@@ -9,8 +9,6 @@ namespace Steamoff.Infrastructure.Steam;
 /// <summary>
 /// Finds the Steam installation, in priority order: registry, running process,
 /// well-known default paths, then Start Menu / Desktop shortcuts. Ported from
-/// the registry-lookup mechanics of the legacy steamOff.ps1 script (see
-/// ASSUMPTIONS A6) and extended with process/shortcut discovery per the brief.
 /// </summary>
 public sealed class SteamDiscoveryService : ISteamDiscoveryService
 {

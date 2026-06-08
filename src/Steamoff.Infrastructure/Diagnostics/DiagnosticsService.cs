@@ -21,7 +21,6 @@ public sealed class DiagnosticsService : IDiagnosticsService
 {
     /// <summary>
     /// Hardcoded per the project brief's release-flow contract: the final build
-    /// is always written to this exact path (see ASSUMPTIONS.md A23) — the only
     /// location <see cref="BuildSnapshotAsync"/> can honestly report on without
     /// guessing at a user-machine layout that doesn't apply to this project.
     /// </summary>

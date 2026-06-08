@@ -6,7 +6,6 @@ using Steamoff.Tests.TestSupport;
 namespace Steamoff.Tests.Logging;
 
 /// <summary>
-/// Covers I3 from specs/004-steamoff-localized-logs-release-flow/tasks.md — 7
 /// representative settings-action categories (open / apply-save-cancel / folder
 /// / exe / steam-path / autostart / test-outcome).
 ///
@@ -14,7 +13,6 @@ namespace Steamoff.Tests.Logging;
 /// <c>SettingsViewModel</c> itself can't be unit-tested — it's built
 /// through <c>AppServices</c>, a concrete sealed class with a parameterless
 /// constructor that eagerly wires real platform services and has no fakeable
-/// seam (see ASSUMPTIONS.md A16, which made the same call for feature 003).
 /// This suite instead exercises the actual seam <c>SettingsViewModel</c> calls
 /// for each action — <see cref="LocalizedLogService.LogAsync"/> — proving the
 /// exact <see cref="LogEventKey"/> each category maps to resolves to a real,

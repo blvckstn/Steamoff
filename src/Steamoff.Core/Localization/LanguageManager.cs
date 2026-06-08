@@ -4,7 +4,6 @@ namespace Steamoff.Core.Localization;
 
 /// <summary>
 /// Owns the fixed catalogue of supported languages (deliberately excluding
-/// Ukrainian — see ASSUMPTIONS) and tracks which one is active right now,
 /// raising <see cref="LanguageChanged"/> whenever it switches.
 /// </summary>
 public sealed class LanguageManager

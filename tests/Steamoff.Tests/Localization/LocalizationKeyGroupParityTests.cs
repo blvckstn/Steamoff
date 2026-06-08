@@ -4,7 +4,6 @@ using Steamoff.Core.Logging;
 namespace Steamoff.Tests.Localization;
 
 /// <summary>
-/// Covers I6 from specs/004-steamoff-localized-logs-release-flow/tasks.md — spot
 /// checks for the three new key groups this feature introduced
 /// (<c>log.event.*</c>, <c>diagnostics.*</c>, <c>settings.journal.*</c>), on top
 /// of the existing whole-table parity coverage in

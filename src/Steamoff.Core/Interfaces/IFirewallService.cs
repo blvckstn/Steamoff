@@ -5,7 +5,6 @@ namespace Steamoff.Core.Interfaces;
 
 /// <summary>
 /// The single mutation point for Microsoft Defender Firewall rules. See
-/// specs/001-steamoff-smart-firewall-switch/contracts/firewall-service.md
 /// for the full invariant contract (naming, grouping, scope of mutation,
 /// idempotency) that every implementation must uphold.
 /// </summary>

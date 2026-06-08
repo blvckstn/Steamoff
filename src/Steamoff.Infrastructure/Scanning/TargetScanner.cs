@@ -10,8 +10,6 @@ namespace Steamoff.Infrastructure.Scanning;
 /// steamwebhelper.exe copy) and scans arbitrary folders for executables.
 /// Cancellable, depth-limited, never blocks the UI thread, tolerates
 /// access-denied subdirectories. The known-relative-path list and the
-/// "exclude steamapps\common" rule are ported from the legacy steamOff.ps1
-/// (see ASSUMPTIONS A6); steamservice.exe / steamwebhelper.exe are tracked as
 /// distinct named targets per the brief (section 11), unlike the legacy script
 /// which lumped everything into one rule group.
 /// </summary>

@@ -10,7 +10,6 @@ namespace Steamoff.Core.Interfaces;
 /// </summary>
 public interface ILocalizationService
 {
-    /// <summary>All languages Steamoff ships with, in display order. Ukrainian is intentionally absent (see ASSUMPTIONS).</summary>
     IReadOnlyList<AppLanguage> AvailableLanguages { get; }
 
     /// <summary>The language currently driving every localized string.</summary>

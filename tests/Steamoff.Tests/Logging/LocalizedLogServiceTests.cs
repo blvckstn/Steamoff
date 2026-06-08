@@ -6,7 +6,6 @@ using Steamoff.Tests.TestSupport;
 namespace Steamoff.Tests.Logging;
 
 /// <summary>
-/// Covers I2 from specs/004-steamoff-localized-logs-release-flow/tasks.md — 4 cases:
 /// key resolution, level mapping/dispatch, formatting with/without args, and the
 /// fallback chain (missing translation still produces a usable, logged message).
 /// </summary>

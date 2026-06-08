@@ -2,7 +2,6 @@ namespace Steamoff.Core.Logging;
 
 /// <summary>
 /// Named, localizable journal events — see
-/// specs/004-steamoff-localized-logs-release-flow/contracts/localized-logging.md
 /// for the full key → localization-key → level table. Each member maps to a
 /// `log.event.*` localization key via <see cref="LogEventTemplates"/>.
 /// </summary>

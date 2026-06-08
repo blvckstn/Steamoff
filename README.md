@@ -5,118 +5,121 @@
 ![Firewall](https://img.shields.io/badge/Firewall-Microsoft%20Defender-33D17A?style=for-the-badge)
 ![Privacy](https://img.shields.io/badge/Privacy-no%20telemetry-FF9F1A?style=for-the-badge)
 
-Steamoff is a small Windows utility for quickly cutting Steam off from the
-internet through Microsoft Defender Firewall rules.
+Steamoff is a small Windows utility that gives Steam a real network off switch.
 
-It is built for people who like the useful parts of Steam Offline Mode, but want
-a more explicit network switch: one click to block Steam, one click to let it
-back online. No router changes, no unplugging Ethernet, no killing Steam, no
-editing game files.
+Not "appear offline". Not "maybe Steam will start in Offline Mode today". A clear firewall-level toggle: block Steam from the internet, keep Windows online, and turn everything back on when you are ready.
 
-Steamoff can also block any extra apps or folders you add, so the same switch can
-be used for games, launchers, tools, test builds, or anything else that should
-temporarily stay offline.
+It is made for players, modders, testers, and PC people who want the useful part of Steam Offline Mode without fighting Steam's mood, login cache, pending updates, or a half-broken hotel Wi-Fi connection.
 
-> Русская версия ниже.
+> Русская версия ниже / below
 
 ---
 
-## Why This Exists
+## The Problem Steamoff Solves
 
-Common searches around this problem look like this:
+> "I only wanted to launch a single-player game, but Steam started a 40 GB update."
+>
+> "Steam Offline Mode says I need to go online first."
+>
+> "I want Discord and the browser online, but Steam completely offline."
+>
+> "How do I block one game from accessing the internet without unplugging the PC?"
+>
+> "I am testing a build and need to know what happens when it has no network."
 
-> "Steam offline mode not working"
->
-> "force Steam to stay offline"
->
-> "block Steam internet access with Windows Firewall"
->
-> "stop Steam from updating a game"
->
-> "block a game from accessing the internet"
->
-> "quickly disable internet for one app on Windows"
+Sound familiar? That is exactly the little everyday PC annoyance Steamoff is built around.
 
-Steam's built-in Offline Mode is useful, but it is still a client feature. It can
-depend on login state, cached credentials, update state, and what Steam decides
-it needs to validate before launching.
+Steam Offline Mode is useful, but it is still a Steam client state. It can depend on cached credentials, update status, recent login state, and whatever the client wants to check before it agrees to behave.
 
-Steamoff works at the Windows firewall layer instead. When offline mode is
-enabled, Steam and selected apps simply do not get network access. That makes the
-behavior more predictable when the goal is network isolation rather than social
-"appear offline" status.
+Steamoff takes the more boring and more reliable route: Microsoft Defender Firewall. When offline mode is enabled, Steam and the apps you choose simply cannot reach the network. For the specific job of cutting internet access, firewall rules are more deterministic than asking Steam nicely.
 
-It is not a Steam patch, not a bypass tool, and not a DRM modification. It is a
-local firewall-rule switch.
+No Steam patching. No DRM tricks. No game-file edits. No router changes. Just local Windows firewall rules with a friendly button on top.
 
 ---
 
-## What Steamoff Does
+## Why It Feels Different
 
-- **One clear offline switch**  
-  Turn Steam network access off or on from a compact desktop window or tray menu.
+Steamoff is not trying to replace Steam. It is a small switch for moments when Steam's own Offline Mode is too vague.
 
-- **PowerShell ScriptFile strategy first**  
-  The primary rule engine generates and runs a local PowerShell firewall script
-  with process-scoped execution policy bypass. This proved the most reliable
-  path for applying and removing Microsoft Defender Firewall rules on Windows.
+Examples:
 
-- **Blocks the real Steam process set**  
-  Steamoff targets Steam itself and its helper processes, including Steam Client
-  WebHelper and other discovered Steam executables.
+- you want to play a game now and decide about updates later;
+- you are on mobile/hotel internet and do not want Steam burning traffic in the background;
+- you need Steam offline while the rest of the PC stays online;
+- you are testing a modded game, launcher, benchmark, or tool without network access;
+- you have a folder full of `.exe` builds and want all of them isolated at once;
+- you want repeatable firewall rules instead of clicking through Windows Defender every time.
 
-- **Custom apps and folders**  
-  Add individual `.exe` files or whole folders. Steamoff can scan folders and
-  include executables inside them, so you can quickly isolate a game, launcher,
-  mod tool, benchmark, or test app.
-
-- **Inbound and outbound option**  
-  By default Steamoff blocks outbound access. You can also enable inbound rule
-  creation when you want stricter isolation.
-
-- **Rule coverage display**  
-  The main window shows how many expected firewall rules are currently active,
-  so you can see whether blocking is complete, partial, or not configured.
-
-- **Tray-first workflow**  
-  Steamoff lives in the system tray. You can enable autostart and choose whether
-  it starts minimized to tray after the first setup.
-
-- **Startup is safe by design**  
-  On first launch, the main window always opens so you can see what the app is
-  and choose settings. Later launches can start quietly in the tray if enabled.
-
-- **Short local log and diagnostics**  
-  The main window includes a compact log with color-coded status lines. Settings
-  include diagnostics for Steam path, firewall access, autostart, tracked files,
-  and rule state.
-
-- **Multilingual UI**  
-  Steamoff includes localized UI resources for Russian, English, German, French,
-  Spanish, Italian, Portuguese, Polish, and Chinese.
+This is the kind of utility that lives in the tray and quietly does one job.
 
 ---
 
-## Good Use Cases
+## How Steamoff Works
 
-Steamoff is useful when you want to:
+Steamoff uses Microsoft Defender Firewall as the source of truth.
 
-- play Steam games without Steam talking to the network;
-- keep Steam from downloading updates until you decide;
-- test how an app behaves without internet;
-- block a specific game launcher while keeping the rest of Windows online;
-- temporarily isolate mod tools, benchmarks, or executables from a folder;
-- switch Steam online/offline without opening Windows Defender Firewall manually;
-- keep a repeatable firewall setup instead of recreating rules by hand.
+When you click **Вкл / Enable**, it:
 
-It is especially handy for gamers, tinkerers, modders, QA testers, and anyone
-who wants a simple "this app is offline now" button.
+1. finds Steam and its helper executables;
+2. adds your custom app and folder targets;
+3. generates a local PowerShell firewall script;
+4. runs it with process-scoped execution policy bypass;
+5. reads the actual firewall state back;
+6. shows how many expected rules are active.
+
+When you click **Выкл / Disable**, it removes the rules it created earlier and checks the result again.
+
+The PowerShell ScriptFile path is the primary strategy because it proved to be the most stable way to apply Microsoft Defender Firewall rules on Windows 10 and Windows 11:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass -Force
+```
+
+That policy change is only for the current PowerShell process. It does not permanently loosen your machine's execution policy.
+
+---
+
+## Features
+
+- One-screen Steam online/offline switch with clear **Вкл** and **Выкл** buttons
+- Blocks Steam, Steam Client WebHelper, and discovered Steam helper executables
+- Add your own `.exe` files
+- Add folders and let Steamoff include executable files inside them
+- Optional inbound rules for stricter isolation
+- Shows rule coverage, for example `25 из 25`
+- Color-coded local journal for quick diagnostics
+- System tray icon with current status
+- Autostart option
+- Start minimized to tray after first setup
+- First launch always opens the main window so nothing happens invisibly
+- 9 UI languages: RU, EN, DE, FR, ES, IT, PT, PL, ZH
+- Tested on Windows 10 and Windows 11
+
+---
+
+## Real Use Cases
+
+**Single-player night, no surprise update**
+
+You sit down to play, Steam decides the game needs an update, and your evening turns into a progress bar. With Steamoff you can keep Steam offline, launch what already exists locally, and update later when you actually want to.
+
+**Bad network, calm Steam**
+
+Train Wi-Fi, hotel Wi-Fi, mobile hotspot, flaky router. Windows can stay online for chat, browser, and downloads, while Steam is cut off until the connection is worth trusting.
+
+**Modding and test builds**
+
+You are checking a modded setup or a small tool and want to know what it does without the internet. Add the `.exe` or the whole folder, switch offline mode on, test, switch it back off.
+
+**One app offline, everything else online**
+
+Sometimes the answer is not "disconnect the PC". It is "this exact program should not talk to the network right now."
 
 ---
 
 ## Privacy And Safety
 
-Steamoff is local-first:
+Steamoff is local-first and quiet:
 
 - no telemetry;
 - no analytics;
@@ -124,62 +127,23 @@ Steamoff is local-first:
 - no cloud backend;
 - no network calls from the app itself;
 - no personal data collection;
-- no Steam credential access;
-- no modification of Steam files or game files.
+- no Steam login or password access;
+- no modification of Steam files;
+- no modification of game files.
 
-Settings and logs are stored locally under `%ProgramData%\Steamoff` with an
-`%AppData%\Steamoff` fallback if needed.
+Settings and logs are stored locally in `%ProgramData%\Steamoff`, with `%AppData%\Steamoff` used as a fallback when needed.
 
-Steamoff only manages firewall rules it owns. The managed rules use the
-`Steamoff` firewall group and deterministic Steamoff rule names, so cleanup is
-scoped to its own rules.
+Steamoff only manages its own firewall rules. They are grouped under `Steamoff`, so cleanup is scoped to the rules this app created.
 
-Windows Defender Firewall changes require administrator rights. That is normal
-for any app that creates or removes firewall rules.
-
-Tested on Windows 10 and Windows 11.
+Administrator rights are required because Windows firewall rules require administrator rights. That is normal for this kind of tool.
 
 ---
 
-## How It Works
+## Requirements
 
-Steamoff uses Microsoft Defender Firewall as the source of truth.
-
-When you enable offline mode, Steamoff:
-
-1. builds the list of Steam targets and your custom targets;
-2. generates local firewall rules for those executables;
-3. applies them through the PowerShell ScriptFile strategy;
-4. reads back the actual firewall state;
-5. shows rule coverage in the UI.
-
-When you disable offline mode, Steamoff removes the rules it created earlier and
-verifies the state again.
-
-The result is intentionally boring in the best way: Windows decides network
-access through its normal firewall mechanism, and Steamoff gives you a fast UI
-for that switch.
-
----
-
-## Download / Release Build
-
-The release folder contains two variants:
-
-```text
-src/Steamoff.App/release/
-  Steamoff-with-dotnet-runtime/      Steamoff.exe + README-RUN.txt
-  Steamoff-without-dotnet-runtime/   Steamoff.exe + README-RUN.txt
-  release-manifest.json
-  release-log.txt
-```
-
-- **Steamoff-with-dotnet-runtime**: larger, self-contained, recommended for most
-  users.
-- **Steamoff-without-dotnet-runtime**: smaller, requires the matching .NET
-  desktop runtime installed on Windows.
-
-Run `Steamoff.exe` as administrator.
+- Windows 10 / 11
+- Administrator rights to apply or remove firewall rules
+- .NET 8 SDK only if you build from source
 
 ---
 
@@ -197,122 +161,148 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 .\build-release.ps1
 ```
 
-The release script restores, builds, tests, publishes both release variants, and
-writes SHA-256 hashes to `release-manifest.json`.
+Release files are created in:
+
+```text
+src/Steamoff.App/release/
+  Steamoff-with-dotnet-runtime/
+  Steamoff-without-dotnet-runtime/
+  release-manifest.json
+```
+
+Use the runtime-included build if you just want the easiest launch. Use the smaller build if the matching .NET desktop runtime is already installed.
 
 ---
 
-## Project Layout
+## Troubleshooting
 
-```text
-src/Steamoff.Core/            models, interfaces, localization resources
-src/Steamoff.Infrastructure/  firewall, PowerShell script writer, settings,
-                              diagnostics, Steam discovery, autostart
-src/Steamoff.App/             WPF UI, view models, tray, startup orchestration
-tests/Steamoff.Tests/         xUnit tests and test doubles
-specs/                        feature specs, contracts, quickstarts
-```
+**Steam is still online**
+
+Run Steamoff as administrator, click **Вкл**, and check the rule counter. If the counter is incomplete, open the log and settings diagnostics. Steamoff reports which targets failed and which rule path was used.
+
+**A game will not launch offline**
+
+Some games genuinely require online validation, a third-party launcher, or a first online start. Steamoff blocks network access; it does not bypass game requirements.
+
+**Antivirus warns about firewall changes**
+
+Steamoff creates and removes Microsoft Defender Firewall rules. Security tools may notice that because it is exactly what the app is meant to do.
+
+**I want another app blocked too**
+
+Add the app's `.exe` or its folder in settings. The same offline switch can include Steam, launchers, tools, and selected games.
 
 ---
 
 # Steamoff ^{RU}
 
-Steamoff — небольшая Windows-утилита для быстрого отключения Steam от интернета
-через правила Microsoft Defender Firewall.
+Steamoff — маленькая Windows-утилита, которая даёт Steam настоящий сетевой выключатель.
 
-Она сделана для тех, кому нравятся практические плюсы автономного режима Steam,
-но нужен более понятный и быстрый сетевой переключатель: один клик — Steam без
-интернета, ещё один клик — Steam снова в сети.
+Не статус "невидимка". Не надежда, что встроенный автономный режим Steam сегодня заведётся без капризов. А понятный переключатель: закрыть Steam доступ в интернет через firewall, оставить Windows онлайн и вернуть всё обратно одним кликом.
 
-При этом Steamoff умеет блокировать не только Steam. Можно добавить свои `.exe`
-файлы или целые папки с программами, которым временно нужно запретить доступ в
-интернет.
+Утилита сделана для игроков, моддеров, тестировщиков и всех, кто любит простые инструменты с честным поведением.
 
 ---
 
-## Какую проблему решает Steamoff
+## Проблема, которую решает Steamoff
 
-Похожие запросы часто выглядят так:
+> "Я хотел просто запустить одиночную игру, а Steam начал качать обновление на 40 ГБ."
+>
+> "Steam Offline Mode пишет, что сначала надо зайти онлайн."
+>
+> "Мне нужен браузер и Discord онлайн, но Steam должен молчать."
+>
+> "Как запретить интернет одной игре, не отключая весь компьютер?"
+>
+> "Я тестирую билд и хочу понять, как он ведёт себя без сети."
 
-> «Steam offline mode не работает»
->
-> «как принудительно оставить Steam offline»
->
-> «как заблокировать интернет Steam через firewall»
->
-> «как запретить Steam обновлять игру»
->
-> «как заблокировать игре доступ в интернет»
->
-> «быстро отключить интернет только одному приложению Windows»
+Это очень узнаваемая боль. Вроде бы мелочь, но именно такие мелочи портят вечер, тест, поездку или нормальный рабочий ритм.
 
-Встроенный автономный режим Steam полезен, но это всё ещё режим внутри клиента.
-Он может зависеть от авторизации, кэша, состояния обновлений и того, что Steam
-решит проверить перед запуском.
+Встроенный автономный режим Steam полезен, но он остаётся режимом внутри клиента. Он может зависеть от авторизации, кэша, состояния обновлений и того, что Steam решил проверить перед запуском.
 
-Steamoff работает ниже — на уровне Windows Firewall. Если автономный режим
-включён, Steam и выбранные приложения просто не получают сетевой доступ. Поэтому
-для задачи «не пускать приложение в интернет» поведение получается более
-предсказуемым, чем надежда только на внутренний режим Steam.
+Steamoff работает ниже — на уровне Microsoft Defender Firewall. Если автономный режим включён, Steam и выбранные приложения просто не получают сетевой доступ. Для задачи "не пускать программу в интернет" это надёжнее, чем просить Steam вести себя офлайн.
 
-Это не патч Steam, не обход DRM и не вмешательство в файлы игр. Это локальный
-переключатель firewall-правил.
+Никаких правок Steam. Никаких обходов DRM. Никаких изменений файлов игр. Никаких танцев с роутером. Только локальные правила Windows Firewall и нормальная кнопка сверху.
 
 ---
 
-## Ключевые возможности
+## Почему это удобно
 
-- **Две понятные кнопки: Вкл / Выкл**  
-  Включить автономный режим или вернуть Steam в сеть.
+Steamoff не пытается заменить Steam. Он закрывает один конкретный сценарий: когда Steam должен быть офлайн, а компьютер — нет.
 
-- **Надёжный PowerShell ScriptFile-способ**  
-  Steamoff применяет правила через локально сгенерированный PowerShell-сценарий.
-  Для текущего проекта этот способ выбран основным, потому что на Windows он
-  работает стабильнее остальных вариантов применения firewall-правил.
+Живые примеры:
 
-- **Блокировка Steam и его helper-процессов**  
-  Учитываются Steam, Steam Client WebHelper, сервисы и вспомогательные
-  исполняемые файлы Steam.
+- хочется поиграть сейчас, а обновления оставить на потом;
+- интернет мобильный, гостиничный или просто нестабильный;
+- надо оставить браузер, Discord и всё остальное онлайн, но Steam изолировать;
+- нужно проверить мод, launcher, benchmark или тестовый билд без сети;
+- есть папка с `.exe`, и все эти приложения надо временно закрыть от интернета;
+- не хочется каждый раз вручную копаться в Windows Defender Firewall.
 
-- **Свои приложения и папки**  
-  Можно добавить отдельный `.exe` или папку. Это удобно для игр, лаунчеров,
-  мод-инструментов, тестовых билдов и любых программ, которым нужно временно
-  закрыть доступ в интернет.
-
-- **Проверка результата**  
-  Steamoff не просто «помнит», что создал правила. Он читает фактическое
-  состояние Windows Firewall и показывает, сколько правил активно.
-
-- **Трей и автозапуск**  
-  Приложение может жить в трее, запускаться вместе с Windows и после первого
-  запуска стартовать свёрнутым.
-
-- **Первый запуск всегда с окном**  
-  Чтобы пользователь понимал, что запущено и какие настройки включены.
-
-- **Локальный журнал и диагностика**  
-  В главном окне есть короткий журнал событий. В настройках — диагностика
-  Steam-пути, firewall-доступа, автозапуска и правил.
-
-- **9 языков интерфейса**  
-  RU, EN, DE, FR, ES, IT, PT, PL, ZH.
+Это не комбайн. Это аккуратный переключатель, который живёт в трее и делает одну вещь.
 
 ---
 
-## Для кого это
+## Как это работает
 
-Steamoff может пригодиться, если вы хотите:
+Steamoff использует Microsoft Defender Firewall.
 
-- играть в Steam-игры без сетевого доступа Steam;
-- временно остановить обновления Steam/игры;
-- проверить, как приложение ведёт себя без интернета;
-- быстро заблокировать конкретную игру или launcher;
-- оставить Windows онлайн, но отключить от сети только выбранные программы;
-- не лазить каждый раз вручную в Windows Defender Firewall;
-- иметь аккуратный повторяемый набор firewall-правил.
+Когда вы нажимаете **Вкл**, приложение:
 
-Это утилита для геймеров, моддеров, тестировщиков, гиков и всех, кто любит
-простые инструменты с понятным поведением.
+1. находит Steam и его helper-процессы;
+2. добавляет ваши приложения и папки из настроек;
+3. генерирует локальный PowerShell-скрипт для firewall;
+4. запускает его с временным обходом политики выполнения;
+5. перечитывает фактическое состояние правил;
+6. показывает, сколько правил активно, например `25 из 25`.
+
+Когда вы нажимаете **Выкл**, Steamoff удаляет созданные им правила и снова проверяет состояние.
+
+Основной способ применения правил — PowerShell ScriptFile, потому что на Windows 10 и Windows 11 он оказался самым стабильным:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass -Force
+```
+
+Это применяется только к текущему процессу PowerShell и не меняет политику выполнения системы навсегда.
+
+---
+
+## Возможности
+
+- Две понятные кнопки: **Вкл** и **Выкл**
+- Блокировка Steam, Steam Client WebHelper и найденных helper-файлов Steam
+- Добавление своих `.exe`
+- Добавление папок с автоматическим поиском исполняемых файлов
+- Опциональные inbound-правила для более строгой изоляции
+- Счётчик активных правил, например `25 из 25`
+- Цветной локальный журнал для быстрой диагностики
+- Иконка в трее с актуальным статусом
+- Автозапуск вместе с Windows
+- Запуск свёрнутым в трей после первой настройки
+- Первый запуск всегда открывает окно, чтобы приложение не работало "втихую"
+- 9 языков интерфейса: RU, EN, DE, FR, ES, IT, PT, PL, ZH
+- Проверено на Windows 10 и Windows 11
+
+---
+
+## Реальные сценарии
+
+**Одиночная игра без внезапного обновления**
+
+Вы садитесь играть, а Steam внезапно решает обновиться. Steamoff позволяет заранее закрыть Steam интернет, запустить то, что уже есть локально, а обновления оставить на потом.
+
+**Плохой интернет, спокойный Steam**
+
+Поезд, гостиница, мобильный хотспот, странный роутер. Windows остаётся онлайн, а Steam не трогает сеть до тех пор, пока вы сами его не вернёте.
+
+**Моды, лаунчеры и тестовые билды**
+
+Добавьте `.exe` или папку, включите автономный режим, проверьте поведение без сети, выключите обратно. Удобно для моддинга, QA, экспериментов и просто аккуратного контроля.
+
+**Не весь ПК офлайн, а конкретная программа**
+
+Иногда не надо отключать интернет целиком. Надо, чтобы одна конкретная программа сейчас не выходила в сеть.
 
 ---
 
@@ -325,21 +315,27 @@ Steamoff работает локально:
 - не отправляет телеметрию;
 - не использует аккаунты;
 - не обращается к облаку;
-- не читает логин/пароль Steam;
-- не меняет файлы Steam или игр.
+- не читает логин или пароль Steam;
+- не меняет файлы Steam;
+- не меняет файлы игр.
 
-Настройки и логи лежат локально в `%ProgramData%\Steamoff` или, если туда нет
-доступа, в `%AppData%\Steamoff`.
+Настройки и журнал хранятся локально в `%ProgramData%\Steamoff`, а если туда нет доступа — в `%AppData%\Steamoff`.
 
-Steamoff управляет только своими firewall-правилами. Они находятся в группе
-`Steamoff`, поэтому приложение может отличить свои правила от чужих и не трогать
-настройки, которые пользователь создал вручную.
+Steamoff управляет только своими правилами firewall. Они находятся в группе `Steamoff`, поэтому приложение отличает свои правила от чужих и не трогает то, что пользователь создал вручную.
 
-Протестировано на Windows 10 и Windows 11.
+Права администратора нужны только потому, что Windows требует их для создания и удаления firewall-правил.
 
 ---
 
-## Сборка
+## Требования
+
+- Windows 10 / 11
+- Права администратора для применения правил firewall
+- .NET 8 SDK только для сборки из исходников
+
+---
+
+## Сборка из исходников
 
 ```powershell
 git clone https://github.com/blvckstn/Steamoff.git
@@ -353,4 +349,33 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 .\build-release.ps1
 ```
 
-Готовые сборки появляются в `src/Steamoff.App/release/`.
+Готовые файлы появляются в:
+
+```text
+src/Steamoff.App/release/
+  Steamoff-with-dotnet-runtime/
+  Steamoff-without-dotnet-runtime/
+  release-manifest.json
+```
+
+Вариант `with-dotnet-runtime` проще для запуска. Вариант `without-dotnet-runtime` меньше, но требует установленный .NET Desktop Runtime.
+
+---
+
+## Если что-то пошло не так
+
+**Steam всё ещё онлайн**
+
+Запустите Steamoff от администратора, нажмите **Вкл** и посмотрите счётчик правил. Если он неполный, откройте журнал и диагностику в настройках — там будет видно, какой файл или какой способ применения правил не сработал.
+
+**Игра не запускается без интернета**
+
+Некоторые игры действительно требуют онлайн-проверку, сторонний launcher или первый запуск в сети. Steamoff блокирует интернет-доступ, но не обходит требования игры.
+
+**Антивирус предупреждает о firewall**
+
+Steamoff создаёт и удаляет правила Microsoft Defender Firewall. Защитные инструменты могут заметить это, потому что именно этим приложение и занимается.
+
+**Нужно заблокировать не только Steam**
+
+Добавьте `.exe` или папку в настройках. Один переключатель может управлять Steam, launcher-ами, играми, инструментами и тестовыми сборками.

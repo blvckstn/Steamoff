@@ -11,7 +11,6 @@ namespace Steamoff.Tests.TestSupport;
 /// <see cref="GetCurrentStateAsync"/> reports as the resulting rule set, so the
 /// orchestrator's "did the primary strategy actually do anything?" verification
 /// (research.md R2 / data-model.md RuleApplicationOutcome) can be exercised without
-/// a real firewall. See specs/006-firewall-fallback-strategy/quickstart.md.
 /// </summary>
 public sealed class ScriptedFirewallService : IFirewallService
 {

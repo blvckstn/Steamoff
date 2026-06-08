@@ -238,7 +238,6 @@ public partial class App : System.Windows.Application
     /// rather than duplicating the relaunch mechanism — Steamoff always needs
     /// admin rights for firewall management, so the "runas" UAC prompt it
     /// triggers is the same one the app already requires on every launch, not
-    /// an extra one (recorded as ASSUMPTIONS.md A21).
     /// </summary>
     private void RestartApplication()
     {

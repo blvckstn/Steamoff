@@ -2,9 +2,8 @@ namespace Steamoff.Core.Logging;
 
 /// <summary>
 /// Static lookup from <see cref="LogEventKey"/> to its localization key and
-/// severity — single source of truth backing <see cref="ILocalizedLogService"/>
-/// and the journal's level filter. See contracts/localized-logging.md for the
-/// full table and rationale (R3) for each severity assignment.
+/// severity. This is the single source of truth backing
+/// <see cref="ILocalizedLogService"/> and the journal's level filter.
 /// </summary>
 public static class LogEventTemplates
 {
