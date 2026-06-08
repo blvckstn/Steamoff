@@ -1,9 +1,11 @@
 # Steamoff
+<img width="1916" height="821" alt="Image" src="https://github.com/user-attachments/assets/1a5f2a51-c292-4f44-a07c-e5ed9527d0da" />
 
 ![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=for-the-badge&logo=windows)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge&logo=dotnet)
 ![Firewall](https://img.shields.io/badge/Firewall-Microsoft%20Defender-33D17A?style=for-the-badge)
 ![Privacy](https://img.shields.io/badge/Privacy-no%20telemetry-FF9F1A?style=for-the-badge)
+
 
 Steamoff is a small Windows utility that gives Steam a real network off switch.
 
