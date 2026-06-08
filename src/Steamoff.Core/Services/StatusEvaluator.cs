@@ -222,9 +222,7 @@ public sealed class StatusEvaluator : IStatusEvaluator
 
             if (covered == 0)
             {
-                return drift.HasDrift
-                    ? (HealthLevel.Warning, OverallStatus.DriftDetected, drift.Summary)
-                    : (HealthLevel.Error, OverallStatus.Error, "Не удалось заблокировать Steam.");
+                return (HealthLevel.Warning, OverallStatus.PartiallyBlocked, $"Steam пока не заблокирован (0/{total}).");
             }
 
             return (HealthLevel.Warning, OverallStatus.PartiallyBlocked, $"Steam заблокирован частично ({covered}/{total}).");
@@ -236,8 +234,11 @@ public sealed class StatusEvaluator : IStatusEvaluator
             return (HealthLevel.Ok, OverallStatus.FullyUnblocked, "Steam разблокирован.");
         }
 
-        return drift.HasDrift
-            ? (HealthLevel.Warning, OverallStatus.DriftDetected, drift.Summary)
-            : (HealthLevel.Warning, OverallStatus.PartiallyBlocked, $"Часть правил всё ещё активна ({covered}/{total}).");
+        if (covered > 0)
+        {
+            return (HealthLevel.Warning, OverallStatus.PartiallyBlocked, $"Часть правил всё ещё активна ({covered}/{total}).");
+        }
+
+        return (HealthLevel.Warning, OverallStatus.PartiallyBlocked, $"Часть правил всё ещё активна ({covered}/{total}).");
     }
 }

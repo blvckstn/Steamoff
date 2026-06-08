@@ -1,5 +1,6 @@
 using Steamoff.Core.Interfaces;
 using Steamoff.Core.Localization;
+using Steamoff.Core.Models;
 using Steamoff.Core.Services;
 using Steamoff.Infrastructure.Autostart;
 using Steamoff.Infrastructure.Diagnostics;
@@ -42,6 +43,21 @@ public sealed class AppServices
     public TrayService Tray { get; }
     public INotificationService Notifications { get; }
     public IDialogService Dialogs { get; }
+    public IFirewallSelfTestRunner SelfTestRunner { get; }
+
+    /// <summary>
+    /// Latest known <see cref="AppSettings"/> snapshot — read by <see cref="Firewall"/>'s
+    /// mode/remembered-strategy delegates (contracts C4/C6). AppServices is built before
+    /// settings finish loading (<c>App.StartupAsync</c> awaits <c>Settings.LoadAsync</c>
+    /// after construction), so a default snapshot is used until <see cref="RefreshSettingsSnapshot"/>
+    /// is called for the first time — and again on every later commit — keeping the
+    /// orchestrator's view current without giving it a direct dependency on the settings
+    /// persistence layer (preserving its existing fakes-based testability per C4's note).
+    /// </summary>
+    private AppSettings _settingsSnapshot = AppSettings.CreateDefault();
+
+    /// <summary>Called by <c>App</c> once settings finish loading and again after every commit, so the firewall orchestrator's mode/memory delegates always see the latest values.</summary>
+    public void RefreshSettingsSnapshot(AppSettings settings) => _settingsSnapshot = settings;
 
     public AppServices()
     {
@@ -49,7 +65,6 @@ public sealed class AppServices
         UserContext = new UserContextService();
         Elevation = new ElevationService();
         Settings = new JsonSettingsService(Log);
-        Firewall = new ComFirewallService(Log);
         SteamDiscovery = new SteamDiscoveryService(Log);
         PathNormalization = new PathNormalizationService();
         SteamPathValidator = new SteamPathValidator(PathNormalization);
@@ -60,6 +75,23 @@ public sealed class AppServices
         Autostart = new TaskSchedulerAutostartService(Log);
         Localization = new LocalizationService(new LanguageManager(), new LocalizedStringProvider(), Log);
         LocalizedLog = new LocalizedLogService(Log, Localization);
+        var primaryFirewall = new ComFirewallService(Log);
+        var secondaryFirewall = new NetSecurityFirewallService(Log);
+        var scriptFileFirewall = new ScriptFileFirewallService(new FirewallScriptFileWriter(Log), new ProcessPowerShellCommandRunner(), Log);
+        Firewall = new FallbackAwareFirewallService(
+            primaryFirewall,
+            secondaryFirewall,
+            scriptFileFirewall,
+            () => _settingsSnapshot.FirewallStrategyMode,
+            () => _settingsSnapshot.LastSuccessfulFirewallStrategy,
+            async variant =>
+            {
+                _settingsSnapshot.LastSuccessfulFirewallStrategy = variant;
+                await Settings.SaveAsync(_settingsSnapshot).ConfigureAwait(false);
+            },
+            Log,
+            LocalizedLog);
+        SelfTestRunner = new FirewallSelfTestRunner(primaryFirewall, secondaryFirewall, scriptFileFirewall, Settings, Log, LocalizedLog);
         Diagnostics = new DiagnosticsService(UserContext, Settings, Log, SteamDiscovery, Scanner, Firewall, Autostart, Localization);
         Tray = new TrayService(Log, Localization);
         Notifications = new BalloonNotificationService(() => Tray.NotifyIconForNotifications);

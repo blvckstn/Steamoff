@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Threading;
 using Steamoff.App.Tray;
 using Steamoff.App.ViewModels;
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -53,11 +54,18 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        // The window's own close (X button) is treated like Cancel — discard pending
-        // edits, including any language preview, instead of silently keeping them.
+        // The window's own close (X button, or an external Close() during app
+        // exit/restart) is treated like Cancel — discard pending edits, including
+        // any language preview, instead of silently keeping them. CancelCommand
+        // ends by raising CloseRequested -> Close(); calling that synchronously
+        // here would re-enter Close() while WPF is still processing this Closing
+        // event, which throws InvalidOperationException ("during closing" — the
+        // same swallowed exception that was blocking "Open Steamoff" from
+        // reopening the main window after a restart). Defer it to the dispatcher
+        // so this Closing sequence finishes first.
         e.Cancel = true;
         _closingViaViewModel = true;
-        ViewModel.CancelCommand.Execute(null);
+        Dispatcher.BeginInvoke(() => ViewModel.CancelCommand.Execute(null), DispatcherPriority.Background);
     }
 
     private void OnSteamPathLostFocus(object sender, RoutedEventArgs e) => ViewModel.RevalidateSteamPath();

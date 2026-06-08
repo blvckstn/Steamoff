@@ -31,7 +31,11 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
     private HealthStatus _status = HealthStatus.Unknown;
     private UserContextInfo _userContext;
     private bool _isBusy;
+    private bool _isCheckingStatus;
     private bool _isLogExpanded;
+    private bool _hasCompletedInitialStatusCheck;
+    private int _activeExpectedRuleCount;
+    private int _expectedRuleCount;
 
     public CompactViewModel(AppServices services, AppSettings settings, UserContextInfo userContext)
     {
@@ -102,9 +106,29 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
             {
                 ((AsyncRelayCommand)ToggleCommand).RaiseCanExecuteChanged();
                 OnPropertyChanged(nameof(ToggleButtonText));
+                OnPropertyChanged(nameof(IsActivityVisible));
+                OnPropertyChanged(nameof(ActivityText));
             }
         }
     }
+
+    public bool IsCheckingStatus
+    {
+        get => _isCheckingStatus;
+        private set
+        {
+            if (SetProperty(ref _isCheckingStatus, value))
+            {
+                OnPropertyChanged(nameof(IsActivityVisible));
+                OnPropertyChanged(nameof(ActivityText));
+                OnPropertyChanged(nameof(CoverageDetailText));
+            }
+        }
+    }
+
+    public bool IsActivityVisible => IsBusy || IsCheckingStatus;
+
+    public string ActivityText => IsBusy ? "Выполняется операция..." : "Проверка состояния...";
 
     public HealthStatus Status
     {
@@ -117,6 +141,7 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
                 OnPropertyChanged(nameof(IsBlocked));
                 OnPropertyChanged(nameof(ToggleButtonText));
                 OnPropertyChanged(nameof(CoverageText));
+                OnPropertyChanged(nameof(CoverageDetailText));
             }
         }
     }
@@ -141,6 +166,21 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
     public string CoverageText => _status.Overall is OverallStatus.NotConfigured or OverallStatus.Error
         ? string.Empty
         : $"{_status.CoveragePercent:0}%";
+
+    public string CoverageDetailText
+    {
+        get
+        {
+            if (_expectedRuleCount <= 0)
+            {
+                return IsCheckingStatus ? "Проверяю правила..." : string.Empty;
+            }
+
+            return _settings.DesiredState == DesiredState.Blocked
+                ? $"Активных правил: {_activeExpectedRuleCount} из {_expectedRuleCount}"
+                : $"Оставшихся активных правил: {_activeExpectedRuleCount} из {_expectedRuleCount}";
+        }
+    }
 
     public string ToggleButtonText => IsBusy
         ? Loc["compact.statusChecking"]
@@ -178,6 +218,8 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(VersionText));
         OnPropertyChanged(nameof(ExpandLogButtonText));
         OnPropertyChanged(nameof(IsRestartRequired));
+        OnPropertyChanged(nameof(ActivityText));
+        OnPropertyChanged(nameof(CoverageDetailText));
     }
 
     public async Task RefreshRecentLogLinesAsync(CancellationToken ct = default)
@@ -228,6 +270,7 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ModeText));
         OnPropertyChanged(nameof(ToggleButtonText));
         OnPropertyChanged(nameof(IsRestartRequired));
+        OnPropertyChanged(nameof(CoverageDetailText));
     }
 
     public void UpdateUserContext(UserContextInfo userContext)
@@ -241,8 +284,15 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
 
     public async Task RefreshStatusAsync(CancellationToken ct = default)
     {
+        if (IsCheckingStatus)
+        {
+            return;
+        }
+
+        IsCheckingStatus = true;
         try
         {
+            _services.Log.Info("Проверка состояния firewall: начало.");
             var targets = await TargetBuilder.BuildAllTargetsAsync(_services, _settings, ct).ConfigureAwait(true);
             var desired = new DesiredFirewallState
             {
@@ -256,15 +306,29 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
                 : ActualFirewallState.Empty;
 
             var wasDrifting = _status.Overall == OverallStatus.DriftDetected;
+            (_activeExpectedRuleCount, _expectedRuleCount) = CountExpectedActiveRules(targets, actual.Rules, _settings.DirectionMode);
             Status = _services.StatusEvaluator.Evaluate(desired, actual, _userContext, _settings.AdditionalFolders, _settings.AdditionalExecutables);
+            OnPropertyChanged(nameof(CoverageDetailText));
 
-            if (Status.Overall == OverallStatus.DriftDetected && !wasDrifting)
+            _services.Log.Info(
+                $"Проверка состояния firewall: завершена. Желательное состояние={_settings.DesiredState}; целей={targets.Count}; ожидаемых правил={_expectedRuleCount}; активных ожидаемых правил={_activeExpectedRuleCount}; найдено правил группы Steamoff={actual.Rules.Count}; итог={Status.Overall}; покрытие={Status.CoveragePercent:0.0}%.");
+
+            if (Status.Overall == OverallStatus.DriftDetected && !wasDrifting && _hasCompletedInitialStatusCheck)
             {
                 await _services.LocalizedLog.LogAsync(LogEventKey.DriftDetected).ConfigureAwait(true);
             }
+
+            if (Status.Overall == OverallStatus.DriftDetected && !_hasCompletedInitialStatusCheck)
+            {
+                _services.Log.Info("Первичная проверка обнаружила частичное совпадение состояния. Предупреждение в журнал не добавлено: стартовый экран показывает фактическое количество правил.");
+            }
+
+            _hasCompletedInitialStatusCheck = true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Core.Exceptions.FirewallOperationException)
         {
+            _services.Log.Error(
+                $"Диагностика ошибки проверки состояния: сохраненное состояние={_settings.DesiredState}; последний статус={Status.Overall}; активных ожидаемых правил={_activeExpectedRuleCount}/{_expectedRuleCount}; ошибка={ex.GetType().Name}: {ex.Message}");
             _services.Log.Error("Не удалось обновить статус firewall.", ex);
             Status = new HealthStatus
             {
@@ -272,6 +336,10 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
                 Overall = OverallStatus.Error,
                 Message = ex.Message
             };
+        }
+        finally
+        {
+            IsCheckingStatus = false;
         }
     }
 
@@ -282,6 +350,8 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         {
             var targets = await TargetBuilder.BuildAllTargetsAsync(_services, _settings, default).ConfigureAwait(true);
             var newState = _settings.DesiredState == DesiredState.Blocked ? DesiredState.Unblocked : DesiredState.Blocked;
+            _services.Log.Info(
+                $"Переключение Steam: начало. Было={_settings.DesiredState}; будет={newState}; целей={targets.Count}; directionMode={_settings.DirectionMode}; cleanupMode={_settings.RuleCleanupMode}; ожидаемых правил={ExpectedRuleCount(targets, _settings.DirectionMode)}.");
 
             if (newState == DesiredState.Blocked)
             {
@@ -303,6 +373,7 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(IsBlocked));
 
             await RefreshStatusAsync().ConfigureAwait(true);
+            _services.Log.Info($"Переключение Steam: завершено. Итог={Status.Overall}; активных ожидаемых правил={_activeExpectedRuleCount}/{_expectedRuleCount}; покрытие={Status.CoveragePercent:0.0}%.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Core.Exceptions.FirewallOperationException)
         {
@@ -321,6 +392,55 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         {
             IsBusy = false;
         }
+    }
+
+    private static int ExpectedRuleCount(IReadOnlyList<FirewallTarget> targets, DirectionMode directionMode) =>
+        targets.Count * (directionMode == DirectionMode.OutboundAndInbound ? 2 : 1);
+
+    private static (int Active, int Expected) CountExpectedActiveRules(
+        IReadOnlyList<FirewallTarget> targets,
+        IReadOnlyList<FirewallRuleState> rules,
+        DirectionMode directionMode)
+    {
+        var expected = ExpectedRuleCount(targets, directionMode);
+        var active = 0;
+
+        foreach (var target in targets)
+        {
+            if (HasActiveExpectedRule(target, rules, RuleDirection.Outbound))
+            {
+                active++;
+            }
+
+            if (directionMode == DirectionMode.OutboundAndInbound && HasActiveExpectedRule(target, rules, RuleDirection.Inbound))
+            {
+                active++;
+            }
+        }
+
+        return (active, expected);
+    }
+
+    private static bool HasActiveExpectedRule(FirewallTarget target, IReadOnlyList<FirewallRuleState> rules, RuleDirection direction)
+    {
+        var expectedName = Core.Services.FirewallRuleNameBuilder.Build(target.DisplayName, direction);
+        return rules.Any(rule =>
+            rule.IsManagedBySteamoff &&
+            string.Equals(rule.RuleName, expectedName, StringComparison.Ordinal) &&
+            rule.Direction == direction &&
+            rule.Action == RuleAction.Block &&
+            rule.Enabled &&
+            PathsMatch(rule.ApplicationName, target.ExecutablePath));
+    }
+
+    private static bool PathsMatch(string? rulePath, string targetPath)
+    {
+        if (string.IsNullOrWhiteSpace(rulePath))
+        {
+            return false;
+        }
+
+        return string.Equals(rulePath.Trim().TrimEnd('\\'), targetPath.Trim().TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
     }
 
     public void Dispose()

@@ -51,6 +51,18 @@
         <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
 
+    <!-- ================= Tooltips ================= -->
+    <Style TargetType="ToolTip">
+        <Setter Property="Background" Value="{StaticResource SurfaceElevatedBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderDarkBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,4"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="HasDropShadow" Value="True"/>
+        <Setter Property="MaxWidth" Value="320"/>
+    </Style>
+
     <!-- ================= Card surface ================= -->
     <Style x:Key="CardStyle" TargetType="Border">
         <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>

@@ -112,11 +112,36 @@
                     <StackPanel>
                         <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{Binding Loc[settings.section.modes]}"/>
                         <CheckBox Style="{StaticResource DarkCheckBoxStyle}" Margin="0,4" Content="{Binding Loc[settings.blockInbound]}"
+                                  ToolTipService.ToolTip="{Binding Loc[settings.tooltip.blockInbound]}"
                                   IsChecked="{Binding BlockInbound}"/>
                         <CheckBox Style="{StaticResource DarkCheckBoxStyle}" Margin="0,4" Content="{Binding Loc[settings.blockAllExeInSteamFolder]}"
+                                  ToolTipService.ToolTip="{Binding Loc[settings.tooltip.blockAllExeInSteamFolder]}"
                                   IsChecked="{Binding BlockAllExecutablesInSteamFolder}"/>
                         <CheckBox Style="{StaticResource DarkCheckBoxStyle}" Margin="0,4" Content="{Binding Loc[settings.warnBeforeUnblock]}"
+                                  ToolTipService.ToolTip="{Binding Loc[settings.tooltip.warnBeforeUnblock]}"
                                   IsChecked="{Binding WarnBeforeUnblock}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Firewall rule application strategy -->
+                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,14">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Style="{StaticResource SectionHeaderStyle}" Margin="0"
+                                       Text="{Binding Loc[settings.section.firewallStrategy]}"/>
+                            <ComboBox Grid.Column="1" Width="170"
+                                      Background="{StaticResource SurfaceElevatedBrush}"
+                                      Foreground="{StaticResource TextPrimaryBrush}"
+                                      BorderBrush="{StaticResource BorderDarkBrush}"
+                                      ItemsSource="{Binding FirewallStrategyModeOptions}"
+                                      SelectedIndex="{Binding FirewallStrategyModeIndex}"/>
+                        </Grid>
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap"
+                                   Text="{Binding Loc[settings.firewallStrategy.description]}"/>
                     </StackPanel>
                 </Border>
 
@@ -165,8 +190,12 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Style="{StaticResource SectionHeaderStyle}" Margin="0"
-                                       Text="{Binding Loc[settings.section.folders]}"/>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource SectionHeaderStyle}" Margin="0"
+                                           Text="{Binding Loc[settings.section.folders]}"/>
+                                <TextBlock Style="{StaticResource CaptionTextStyle}"
+                                           Text="{Binding Loc[settings.section.folders.description]}"/>
+                            </StackPanel>
                             <Button Grid.Column="1" Style="{StaticResource AddItemButtonStyle}"
                                     Command="{Binding AddFolderCommand}" ToolTip="{Binding Loc[settings.button.addFolder]}">
                                 <StackPanel Orientation="Horizontal">
@@ -188,7 +217,8 @@
                                             </Grid.ColumnDefinitions>
 
                                             <CheckBox Grid.Column="0" Style="{StaticResource DarkCheckBoxStyle}" VerticalAlignment="Center"
-                                                      Margin="0,0,10,0" IsChecked="{Binding Enabled}"/>
+                                                      Margin="0,0,10,0" IsChecked="{Binding Enabled}"
+                                                      ToolTipService.ToolTip="{Binding DataContext.Loc[settings.tooltip.folderToggle], RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
 
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                 <TextBlock FontWeight="SemiBold">
@@ -239,8 +269,12 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Style="{StaticResource SectionHeaderStyle}" Margin="0"
-                                       Text="{Binding Loc[settings.section.exeFiles]}"/>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource SectionHeaderStyle}" Margin="0"
+                                           Text="{Binding Loc[settings.section.exeFiles]}"/>
+                                <TextBlock Style="{StaticResource CaptionTextStyle}"
+                                           Text="{Binding Loc[settings.section.exeFiles.description]}"/>
+                            </StackPanel>
                             <Button Grid.Column="1" Style="{StaticResource AddItemButtonStyle}"
                                     Command="{Binding AddExeCommand}" ToolTip="{Binding Loc[settings.button.addExe]}">
                                 <StackPanel Orientation="Horizontal">
@@ -262,7 +296,8 @@
                                             </Grid.ColumnDefinitions>
 
                                             <CheckBox Grid.Column="0" Style="{StaticResource DarkCheckBoxStyle}" VerticalAlignment="Center"
-                                                      Margin="0,0,10,0" IsChecked="{Binding Enabled}"/>
+                                                      Margin="0,0,10,0" IsChecked="{Binding Enabled}"
+                                                      ToolTipService.ToolTip="{Binding DataContext.Loc[settings.tooltip.exeToggle], RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
 
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>

@@ -454,3 +454,26 @@ to `origin/master` with a plain `git push origin master`
 ## 12. Final summary
 See the end-of-session message in this conversation for the consolidated
 12-point report the brief requires (§15).
+# Codex continuation note (2026-06-08)
+
+Claude Code hit limits during later firewall fallback / UX work. Codex
+continued from the dirty tree and created `CODEX_HANDOFF.md` as the canonical
+handoff note for the next Claude Code session.
+
+Read `CODEX_HANDOFF.md` before continuing. It documents:
+
+- the Steamoff firewall rule ownership contract
+- the NetSecurity fallback strategy
+- the PowerShell argument-binding fix
+- log UTF-8 / mojibake handling
+- status badge, spinner, and rule coverage UI work
+- startup status evaluation changes
+- latest build/test/release results
+
+Latest verified state from the continuation:
+
+```text
+dotnet build Steamoff.slnx -> succeeded, 0 errors
+dotnet test tests\Steamoff.Tests\Steamoff.Tests.csproj --no-restore -> 122/122 passed
+.\build-release.ps1 -> succeeded
+```

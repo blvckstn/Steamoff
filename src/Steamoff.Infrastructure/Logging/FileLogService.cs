@@ -28,6 +28,7 @@ public sealed class FileLogService : ILogService
     {
         _logDirectory = logDirectory;
         Directory.CreateDirectory(_logDirectory);
+        ArchiveMojibakeLogIfNeeded();
     }
 
     public string LogFilePath => Path.Combine(_logDirectory, LogFileName);
@@ -122,6 +123,41 @@ public sealed class FileLogService : ILogService
         var rotatedName = $"{LogFileName}.{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.old";
         var rotatedPath = Path.Combine(_logDirectory, rotatedName);
         File.Move(LogFilePath, rotatedPath, overwrite: true);
+    }
+
+    private void ArchiveMojibakeLogIfNeeded()
+    {
+        if (!File.Exists(LogFilePath))
+        {
+            return;
+        }
+
+        try
+        {
+            var sample = File.ReadAllText(LogFilePath, Encoding.UTF8);
+            if (!LooksLikeMojibake(sample))
+            {
+                return;
+            }
+
+            var archivedName = $"{LogFileName}.{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.mojibake.old";
+            File.Move(LogFilePath, Path.Combine(_logDirectory, archivedName), overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Steamoff] Не удалось архивировать лог с поврежденной кодировкой: {ex.Message}");
+        }
+    }
+
+    private static bool LooksLikeMojibake(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        var markers = new[] { "ЌҐ", "г¤", "а®", "Рќ", "Рћ", "СЃ", "вЂ" };
+        return markers.Any(marker => text.Contains(marker, StringComparison.Ordinal));
     }
 
     private static string ResolveLogDirectory()

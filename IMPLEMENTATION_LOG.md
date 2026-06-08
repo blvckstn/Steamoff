@@ -5,6 +5,58 @@ the localization/settings feature session (`specs/002-steamoff-localization-sett
 the underlying firewall-switch core (`specs/001-steamoff-smart-firewall-switch`)
 was already in place when this session started.
 
+## Codex continuation handoff (2026-06-08)
+
+Claude Code hit limits during the firewall fallback / UX work. Codex continued
+from the dirty working tree and documented the exact continuation point in:
+
+```text
+CODEX_HANDOFF.md
+```
+
+High-level changes from the continuation:
+
+- Added a NetSecurity PowerShell fallback strategy behind the existing COM
+  firewall strategy.
+- Fixed the real PowerShell argument-binding bug where paths containing
+  `Program Files (x86)` could be parsed incorrectly.
+- Passed PowerShell rule values through per-process environment variables
+  instead of interpolating command-line arguments.
+- Kept Steamoff rule ownership deterministic: group `Steamoff`, names
+  `Steamoff - Block - <TargetDisplayName> - <Outbound|Inbound>`.
+- Fixed log encoding for PowerShell stdout/stderr and added startup archival
+  for old mojibake log files.
+- Added a rounded status badge, online/offline pulse colors, an activity
+  spinner, and rule coverage text in the main UI.
+- Adjusted startup status evaluation so the app reports factual rule coverage
+  instead of immediately logging a scary drift/mismatch state.
+- Added more diagnostic log context around status checks, toggles, and
+  NetSecurity fallback operations.
+- Verified the tree with build, tests, and release script.
+
+Latest verified results:
+
+```text
+dotnet build Steamoff.slnx
+Result: succeeded, 0 errors
+
+dotnet test tests\Steamoff.Tests\Steamoff.Tests.csproj --no-restore
+Result: passed, 122/122
+
+.\build-release.ps1
+Result: succeeded
+```
+
+Latest release artifacts:
+
+```text
+src\Steamoff.App\release\Steamoff-with-dotnet-runtime\Steamoff.exe
+SHA256 B395CCADD6B6027A69D60AD7A906B332F78C157B61215BBB79DAEDB2C9D69355
+
+src\Steamoff.App\release\Steamoff-without-dotnet-runtime\Steamoff.exe
+SHA256 E273BD9A9B4191BC920465413E5C87BE1739930706BB1A3651A1B8D71599E409
+```
+
 ## Baseline build (before feature work)
 The `Steamoff.App` layer was mid-scaffold (several views/ViewModels existed
 only as stubs or were missing entirely). Bringing it to a compiling baseline

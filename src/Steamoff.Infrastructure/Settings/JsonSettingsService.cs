@@ -132,6 +132,12 @@ public sealed class JsonSettingsService : ISettingsService
         // User-added targets (AdditionalFolders/AdditionalExecutables) are
         // preserved as-is because we deserialize into the same model and only
         // bump the version stamp here.
+        // v2 -> v3: added FirewallStrategyMode/LastSuccessfulFirewallStrategy/FirewallSelfTest.
+        // System.Text.Json already filled them with the model's defaults
+        // (Auto / null / a fresh record with Outcome = NotYetRun) for files that
+        // predate these fields — which is exactly what triggers the one-time
+        // first-launch self-test on the next startup, for upgrades and fresh
+        // installs alike.
         settings.Version = AppSettings.CurrentVersion;
         return settings;
     }

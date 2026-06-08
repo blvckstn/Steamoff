@@ -82,15 +82,27 @@ public sealed class ComFirewallService : IFirewallService
                 foreach (var target in targets)
                 {
                     ct.ThrowIfCancellationRequested();
-                    UpsertRule(policy, target, RuleDirection.Outbound);
-                    if (directionMode == DirectionMode.OutboundAndInbound)
+                    try
                     {
-                        UpsertRule(policy, target, RuleDirection.Inbound);
+                        UpsertRule(policy, target, RuleDirection.Outbound);
+                        if (directionMode == DirectionMode.OutboundAndInbound)
+                        {
+                            UpsertRule(policy, target, RuleDirection.Inbound);
+                        }
+                        else
+                        {
+                            // If a previously-created Inbound rule exists (mode switched), disable it rather than leaving it active and unmanaged.
+                            TryDisableExisting(policy, target, RuleDirection.Inbound);
+                        }
                     }
-                    else
+                    catch (IOException ex)
                     {
-                        // If a previously-created Inbound rule exists (mode switched), disable it rather than leaving it active and unmanaged.
-                        TryDisableExisting(policy, target, RuleDirection.Inbound);
+                        // A target can become transiently inaccessible between scan time and rule
+                        // creation (e.g. Steam mid-update locks/replaces one of its helper executables).
+                        // The Windows Firewall COM API then rejects ApplicationName with ERROR_FILE_NOT_FOUND,
+                        // surfaced by .NET as FileNotFoundException/IOException. One bad target must not
+                        // abort blocking for every other target, including Steam itself.
+                        _log.Warning($"Не удалось создать/обновить правило firewall для '{target.DisplayName}': {ex.Message}. Цель пропущена, обработка продолжена.");
                     }
                 }
 

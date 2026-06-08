@@ -25,6 +25,15 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private const int JournalLineCount = 200;
     private static readonly string[] JournalFilterTags = { string.Empty, "[ERROR]", "[WARN]", "[INFO]" };
 
+    /// <summary>Display order for the strategy-mode picker — index N maps to <see cref="FirewallStrategyModeOptions"/>[N].</summary>
+    private static readonly FirewallStrategyMode[] FirewallStrategyModeOrder =
+    {
+        FirewallStrategyMode.Auto,
+        FirewallStrategyMode.ForcePrimary,
+        FirewallStrategyMode.ForceSecondary,
+        FirewallStrategyMode.ForceScriptFile
+    };
+
     private readonly AppServices _services;
     private readonly IDialogService _dialogs;
     private readonly DispatcherTimer _journalRefreshTimer;
@@ -84,6 +93,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _ = _services.LocalizedLog.LogAsync(LogEventKey.SettingsOpened);
 
         RebuildJournalFilterOptions();
+        RebuildFirewallStrategyModeOptions();
         _journalRefreshTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromSeconds(5)
@@ -100,6 +110,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(LastRunText));
         OnPropertyChanged(nameof(SteamPathStatusText));
         RebuildJournalFilterOptions();
+        RebuildFirewallStrategyModeOptions();
     }
 
     public void Dispose()
@@ -337,6 +348,29 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Localized display labels for the firewall strategy-mode picker ("Авто"/"Вариант 1/2/3"), rebuilt on language change.</summary>
+    public ObservableCollection<string> FirewallStrategyModeOptions { get; } = new();
+
+    /// <summary>
+    /// Index into <see cref="FirewallStrategyModeOrder"/>/<see cref="FirewallStrategyModeOptions"/>, two-way bound
+    /// to <see cref="AppSettings.FirewallStrategyMode"/> via the draft session — persisted through the normal
+    /// Apply/Save flow like every other setting in this window (FR-009: applies on commit, no restart needed).
+    /// </summary>
+    public int FirewallStrategyModeIndex
+    {
+        get => Math.Max(0, Array.IndexOf(FirewallStrategyModeOrder, _session.Draft.FirewallStrategyMode));
+        set
+        {
+            if (value < 0 || value >= FirewallStrategyModeOrder.Length)
+            {
+                return;
+            }
+
+            var mode = FirewallStrategyModeOrder[value];
+            SetDraft(mode, v => _session.Draft.FirewallStrategyMode = v, _session.Draft.FirewallStrategyMode, nameof(FirewallStrategyModeIndex));
+        }
+    }
+
     private void SetDraft<T>(T newValue, Action<T> assign, T currentValue, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
     {
         if (EqualityComparer<T>.Default.Equals(newValue, currentValue))
@@ -444,6 +478,17 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
         _journalFilterIndex = Math.Clamp(selectedIndex, 0, JournalFilterOptions.Count - 1);
         OnPropertyChanged(nameof(JournalFilterIndex));
+    }
+
+    private void RebuildFirewallStrategyModeOptions()
+    {
+        FirewallStrategyModeOptions.Clear();
+        FirewallStrategyModeOptions.Add(Loc["settings.firewallStrategy.auto"]);
+        FirewallStrategyModeOptions.Add(Loc["settings.firewallStrategy.variant1"]);
+        FirewallStrategyModeOptions.Add(Loc["settings.firewallStrategy.variant2"]);
+        FirewallStrategyModeOptions.Add(Loc["settings.firewallStrategy.variant3"]);
+
+        OnPropertyChanged(nameof(FirewallStrategyModeIndex));
     }
 
     private async Task RefreshJournalAsync(CancellationToken ct = default)

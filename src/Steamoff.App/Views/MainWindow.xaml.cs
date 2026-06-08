@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Threading;
 using Steamoff.App.Tray;
 using Steamoff.App.ViewModels;
 
@@ -23,12 +24,26 @@ public partial class MainWindow : Window
 
     private void OnWindowClosing(object? sender, CancelEventArgs e)
     {
-        if (App.Current is App { IsExiting: true })
+        var app = App.Current;
+        if (app is { IsExiting: true })
         {
+            app.Log?.Info("MainWindow.Closing: приложение завершает работу — окно закрывается по-настоящему.");
             return;
         }
 
+        app?.Log?.Info($"MainWindow.Closing: окно скрывается в трей (было IsVisible={IsVisible}, WindowState={WindowState}).");
+
+        // Calling Hide() synchronously from inside Closing corrupts the window's
+        // internal close-state machine (WPF then throws InvalidOperationException
+        // "during closing" on every later Show() — silently swallowed by
+        // App.OnDispatcherUnhandledException, so "Open Steamoff" appears to do
+        // nothing). Deferring to the dispatcher lets the Closing sequence finish
+        // cleanly first.
         e.Cancel = true;
-        Hide();
+        Dispatcher.BeginInvoke(() =>
+        {
+            Hide();
+            app?.Log?.Info($"MainWindow.Closing: окно скрыто (отложенный Hide выполнен; теперь IsVisible={IsVisible}).");
+        }, DispatcherPriority.Background);
     }
 }

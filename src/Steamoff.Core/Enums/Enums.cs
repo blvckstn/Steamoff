@@ -136,3 +136,45 @@ public enum PathCheckStatus
     /// <summary>A shortcut (.lnk) was provided but its target couldn't be resolved.</summary>
     ShortcutUnresolved
 }
+
+/// <summary>Stable identity for one of the three concrete IFirewallService implementations — "Вариант 1/2/3".</summary>
+public enum FirewallStrategyVariant
+{
+    /// <summary>"Вариант 1" — ComFirewallService (COM/INetFwPolicy2).</summary>
+    Primary,
+
+    /// <summary>"Вариант 2" — NetSecurityFirewallService (inline -Command PowerShell).</summary>
+    Secondary,
+
+    /// <summary>"Вариант 3" — ScriptFileFirewallService (elevated .ps1 file).</summary>
+    ScriptFile
+}
+
+/// <summary>How FallbackAwareFirewallService decides which strategy to use for an operation.</summary>
+public enum FirewallStrategyMode
+{
+    /// <summary>System decides — tries the remembered last-successful strategy first, then cascades.</summary>
+    Auto,
+
+    /// <summary>Force "Вариант 1" only — no fallback.</summary>
+    ForcePrimary,
+
+    /// <summary>Force "Вариант 2" only — no fallback.</summary>
+    ForceSecondary,
+
+    /// <summary>Force "Вариант 3" only — no fallback.</summary>
+    ForceScriptFile
+}
+
+/// <summary>Distinguishes "never probed" from every possible probe result of the first-run self-test.</summary>
+public enum FirewallSelfTestOutcome
+{
+    /// <summary>Fresh install / pre-feature settings — triggers the one-time probe on next startup.</summary>
+    NotYetRun,
+
+    /// <summary>Probe ran to completion; WorkingStrategies holds 0..3 entries (0 = none worked).</summary>
+    CompletedWithResult,
+
+    /// <summary>Probe started but could not finish cleanly (interrupted) — recorded distinctly, never retried automatically.</summary>
+    Inconclusive
+}

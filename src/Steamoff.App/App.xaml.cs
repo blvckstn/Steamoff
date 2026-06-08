@@ -32,6 +32,9 @@ public partial class App : System.Windows.Application
 
     public new static App Current => (App)System.Windows.Application.Current!;
 
+    /// <summary>Exposes the composition root's log sink to windows (e.g. MainWindow's Closing tracking) without giving them the full AppServices.</summary>
+    internal Steamoff.Core.Interfaces.ILogService? Log => _services?.Log;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -55,30 +58,50 @@ public partial class App : System.Windows.Application
     {
         var services = _services!;
 
-        _settings = await services.Settings.LoadAsync().ConfigureAwait(true);
-        services.Localization.SetLanguage(_settings.Language);
-        await services.LocalizedLog.LogAsync(LogEventKey.AppStarted).ConfigureAwait(true);
-
-        if (!_settings.IsFirstLaunchCompleted)
+        try
         {
-            await RunFirstLaunchDialogAsync(services, _settings).ConfigureAwait(true);
+            _settings = await services.Settings.LoadAsync().ConfigureAwait(true);
+            services.RefreshSettingsSnapshot(_settings);
+            services.Localization.SetLanguage(_settings.Language);
+            await services.LocalizedLog.LogAsync(LogEventKey.AppStarted).ConfigureAwait(true);
+
+            if (!_settings.IsFirstLaunchCompleted)
+            {
+                await RunFirstLaunchDialogAsync(services, _settings).ConfigureAwait(true);
+            }
+
+            // First-launch self-test (FR-010): probes all three firewall strategies once,
+            // pre-seeds "last successful strategy" for Auto mode, and re-loads settings so
+            // the freshly-persisted FirewallSelfTest/LastSuccessfulFirewallStrategy values
+            // are reflected before the main window can trigger any real block/unblock.
+            await services.SelfTestRunner.RunIfNeededAsync().ConfigureAwait(true);
+            _settings = await services.Settings.LoadAsync().ConfigureAwait(true);
+            services.RefreshSettingsSnapshot(_settings);
+
+            services.Tray.Initialize();
+            WireTray(services);
+
+            var userContext = services.UserContext.GetCurrentContext();
+            services.Log.Info("StartupAsync: создаю главное окно...");
+            _mainWindow = new MainWindow(new CompactViewModel(services, _settings, userContext));
+            MainWindow = _mainWindow;
+            _mainWindow.ViewModel.SettingsRequested += OpenSettings;
+            services.Log.Info($"StartupAsync: главное окно создано (_mainWindow назначено). StartMinimizedToTray={_settings.StartMinimizedToTray}.");
+
+            if (!_settings.StartMinimizedToTray)
+            {
+                _mainWindow.Show();
+                services.Log.Info($"StartupAsync: вызван Show() при запуске. IsVisible={_mainWindow.IsVisible}, WindowState={_mainWindow.WindowState}.");
+            }
+
+            await _mainWindow.ViewModel.RefreshStatusAsync().ConfigureAwait(true);
+            services.Tray.UpdateStatus(BuildHealthSnapshot(_mainWindow), !userContext.HasFirewallAccess);
         }
-
-        services.Tray.Initialize();
-        WireTray(services);
-
-        var userContext = services.UserContext.GetCurrentContext();
-        _mainWindow = new MainWindow(new CompactViewModel(services, _settings, userContext));
-        MainWindow = _mainWindow;
-        _mainWindow.ViewModel.SettingsRequested += OpenSettings;
-
-        if (!_settings.StartMinimizedToTray)
+        catch (Exception ex)
         {
-            _mainWindow.Show();
+            services.Log.Error("StartupAsync: исключение при запуске приложения — главное окно могло не создаться.", ex);
+            throw;
         }
-
-        await _mainWindow.ViewModel.RefreshStatusAsync().ConfigureAwait(true);
-        services.Tray.UpdateStatus(BuildHealthSnapshot(_mainWindow), !userContext.HasFirewallAccess);
     }
 
     private async Task RunFirstLaunchDialogAsync(AppServices services, AppSettings settings)
@@ -110,16 +133,27 @@ public partial class App : System.Windows.Application
     {
         if (_mainWindow is null)
         {
+            _services?.Log.Info("ShowMainWindow: главное окно ещё не создано (_mainWindow is null) — запрос проигнорирован.");
             return;
         }
 
-        _mainWindow.Show();
-        if (_mainWindow.WindowState == WindowState.Minimized)
+        _services?.Log.Info($"ShowMainWindow: запрошено отображение. До вызова Show(): IsVisible={_mainWindow.IsVisible}, WindowState={_mainWindow.WindowState}.");
+        try
         {
-            _mainWindow.WindowState = WindowState.Normal;
-        }
+            _mainWindow.Show();
+            if (_mainWindow.WindowState == WindowState.Minimized)
+            {
+                _mainWindow.WindowState = WindowState.Normal;
+            }
 
-        _mainWindow.Activate();
+            _mainWindow.Activate();
+            _services?.Log.Info($"ShowMainWindow: после вызова Show()/Activate(): IsVisible={_mainWindow.IsVisible}, WindowState={_mainWindow.WindowState}.");
+        }
+        catch (Exception ex)
+        {
+            _services?.Log.Error("ShowMainWindow: исключение при попытке отобразить главное окно.", ex);
+            throw;
+        }
     }
 
     private void OpenSettings()
@@ -154,6 +188,7 @@ public partial class App : System.Windows.Application
     private void OnSettingsCommitted(AppSettings updated)
     {
         _settings = updated;
+        _services?.RefreshSettingsSnapshot(updated);
         _mainWindow?.ViewModel.UpdateSettings(updated);
         _ = (_mainWindow?.ViewModel.RefreshStatusAsync());
     }
