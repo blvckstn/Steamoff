@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Steamoff.App.Localization;
+using Steamoff.App.Logging;
 using Steamoff.App.Services;
 using Steamoff.Core.Enums;
 using Steamoff.Core.Interfaces;
@@ -501,9 +502,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             JournalLines.Clear();
             foreach (var line in lines)
             {
-                if (tag.Length == 0 || line.Contains(tag, StringComparison.Ordinal))
+                if (LogLineDisplay.MatchesTag(line, tag))
                 {
-                    JournalLines.Add(line);
+                    JournalLines.Add(LogLineDisplay.ToDisplayText(line));
                 }
             }
 

@@ -54,11 +54,12 @@ public sealed class FirewallSelfTestRunner : IFirewallSelfTestRunner
     /// <summary>Harmless, almost-certainly-nonexistent path — the probe never needs the program to actually exist; firewall rule creation doesn't require it.</summary>
     private const string ProbeExecutablePath = @"C:\Steamoff\SelfTestProbe\steamoff-selftest-probe.exe";
 
+    // Probe in the same priority Auto uses: generated PowerShell script first.
     private static readonly FirewallStrategyVariant[] CanonicalOrder =
     {
-        FirewallStrategyVariant.Primary,
+        FirewallStrategyVariant.ScriptFile,
         FirewallStrategyVariant.Secondary,
-        FirewallStrategyVariant.ScriptFile
+        FirewallStrategyVariant.Primary
     };
 
     private readonly IFirewallService _primary;
@@ -115,9 +116,9 @@ public sealed class FirewallSelfTestRunner : IFirewallSelfTestRunner
 
     private IEnumerable<(FirewallStrategyVariant Variant, IFirewallService Service)> Strategies()
     {
-        yield return (FirewallStrategyVariant.Primary, _primary);
-        yield return (FirewallStrategyVariant.Secondary, _secondary);
         yield return (FirewallStrategyVariant.ScriptFile, _scriptFile);
+        yield return (FirewallStrategyVariant.Secondary, _secondary);
+        yield return (FirewallStrategyVariant.Primary, _primary);
     }
 
     /// <summary>

@@ -39,7 +39,7 @@ public sealed class FirewallSelfTestRunnerTests
 
         var saved = settings.LastSaved!;
         Assert.Equal(FirewallSelfTestOutcome.CompletedWithResult, saved.FirewallSelfTest.Outcome);
-        Assert.Equal(new[] { FirewallStrategyVariant.Primary, FirewallStrategyVariant.ScriptFile }, saved.FirewallSelfTest.WorkingStrategies);
+        Assert.Equal(new[] { FirewallStrategyVariant.ScriptFile, FirewallStrategyVariant.Primary }, saved.FirewallSelfTest.WorkingStrategies);
         Assert.NotNull(saved.FirewallSelfTest.CompletedAt);
     }
 
@@ -120,7 +120,7 @@ public sealed class FirewallSelfTestRunnerTests
         await runner.RunIfNeededAsync();
 
         var saved = settings.LastSaved!;
-        Assert.Equal(FirewallStrategyVariant.Secondary, saved.LastSuccessfulFirewallStrategy);
+        Assert.Equal(FirewallStrategyVariant.ScriptFile, saved.LastSuccessfulFirewallStrategy);
     }
 
     [Fact]

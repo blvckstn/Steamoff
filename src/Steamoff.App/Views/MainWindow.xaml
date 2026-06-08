@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:Steamoff.App.Converters"
         xmlns:enums="clr-namespace:Steamoff.Core.Enums;assembly=Steamoff.Core"
+        xmlns:status="clr-namespace:Steamoff.App.Status"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         mc:Ignorable="d"
@@ -20,6 +21,44 @@
         <Style x:Key="SectionHeaderStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextStyle}">
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="MainStatusCardStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
+            <Setter Property="Background">
+                <Setter.Value>
+                    <SolidColorBrush Color="#2A2B34"/>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Status.Overall}" Value="{x:Static enums:OverallStatus.FullyUnblocked}">
+                    <Setter Property="BorderBrush" Value="#3EBC78"/>
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="MainOnlinePulse">
+                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                <ColorAnimation Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                To="#284B38" Duration="0:0:1.1"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <RemoveStoryboard BeginStoryboardName="MainOnlinePulse"/>
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status.Overall}" Value="{x:Static enums:OverallStatus.FullyBlocked}">
+                    <Setter Property="BorderBrush" Value="#FF9F1A"/>
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="MainOfflinePulse">
+                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                <ColorAnimation Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                To="#5A3A1D" Duration="0:0:1.1"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <RemoveStoryboard BeginStoryboardName="MainOfflinePulse"/>
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
 
         <Style x:Key="StatusBadgeStyle" TargetType="Border">
@@ -112,17 +151,20 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Style="{StaticResource HeadingTextStyle}" Text="{Binding Loc[compact.title]}"/>
                 <TextBlock Style="{StaticResource SubheadingTextStyle}" Text="{Binding Loc[compact.subtitle]}" Margin="0,2,0,0"/>
             </StackPanel>
-            <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Command="{Binding OpenSettingsCommand}"
+            <status:RobotStatusIcon Grid.Column="1" Width="66" Height="66" Margin="8,-10,8,-8"
+                                    VerticalAlignment="Center" StatusKind="{Binding StatusIconKind}"/>
+            <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Command="{Binding OpenSettingsCommand}"
                     ToolTipService.ToolTip="{Binding Loc[compact.tooltip.settingsButton]}" Content="⚙" FontSize="18"/>
         </Grid>
 
         <!-- Status card -->
-        <Border Grid.Row="1" Style="{StaticResource CardStyle}" VerticalAlignment="Top">
+        <Border Grid.Row="1" Style="{StaticResource MainStatusCardStyle}" VerticalAlignment="Top">
             <StackPanel>
                 <Border Style="{StaticResource StatusBadgeStyle}" Margin="0,0,0,16">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -147,14 +189,28 @@
                            HorizontalAlignment="Center" Margin="0,0,0,4"
                            Visibility="{Binding CoverageDetailText, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
-                <Button Style="{StaticResource BigToggleButtonStyle}" Margin="0,16,0,16"
-                        Command="{Binding ToggleCommand}"
-                        ToolTipService.ToolTip="{Binding Loc[compact.tooltip.toggleButton]}"
-                        Background="{Binding Level, Converter={StaticResource HealthLevelToBrushConverter}}">
-                    <TextBlock Text="{Binding ToggleButtonText}" Foreground="#1B1B1F" FontWeight="SemiBold" FontSize="18"/>
-                </Button>
+                <TextBlock Text="{Binding OfflineModeTitle}" Style="{StaticResource SectionHeaderStyle}"
+                           HorizontalAlignment="Center" Margin="0,16,0,10"/>
 
-                <TextBlock Text="{Binding ModeText}" Style="{StaticResource CaptionTextStyle}" HorizontalAlignment="Center"/>
+                <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Style="{StaticResource BigToggleButtonStyle}"
+                            Command="{Binding EnableOfflineCommand}"
+                            ToolTipService.ToolTip="{Binding Loc[compact.tooltip.toggleButton]}"
+                            Background="{StaticResource AccentOrangeBrush}">
+                        <TextBlock Text="{Binding OfflineOnButtonText}" Foreground="#1B1B1F" FontWeight="SemiBold" FontSize="18"/>
+                    </Button>
+                    <Button Grid.Column="2" Style="{StaticResource BigToggleButtonStyle}"
+                            Command="{Binding DisableOfflineCommand}"
+                            ToolTipService.ToolTip="{Binding Loc[compact.tooltip.toggleButton]}"
+                            Background="{StaticResource GreenStatusBrush}">
+                        <TextBlock Text="{Binding OfflineOffButtonText}" Foreground="#1B1B1F" FontWeight="SemiBold" FontSize="18"/>
+                    </Button>
+                </Grid>
             </StackPanel>
         </Border>
 

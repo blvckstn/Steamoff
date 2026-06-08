@@ -307,6 +307,28 @@
         </Setter>
     </Style>
 
+    <SolidColorBrush x:Key="ComboBoxTextBrush" Color="#34343A"/>
+
+    <Style TargetType="ComboBox">
+        <Setter Property="Foreground" Value="{StaticResource ComboBoxTextBrush}"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource ComboBoxTextBrush}"/>
+        <Setter Property="ItemTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}"
+                               Foreground="{StaticResource ComboBoxTextBrush}"
+                               TextElement.Foreground="{StaticResource ComboBoxTextBrush}"
+                               TextWrapping="NoWrap"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ComboBoxItem">
+        <Setter Property="Foreground" Value="{StaticResource ComboBoxTextBrush}"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource ComboBoxTextBrush}"/>
+    </Style>
+
     <Style x:Key="DarkCheckBoxStyle" TargetType="CheckBox">
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="Cursor" Value="Hand"/>

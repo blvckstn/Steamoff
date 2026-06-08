@@ -135,7 +135,7 @@
                                        Text="{Binding Loc[settings.section.firewallStrategy]}"/>
                             <ComboBox Grid.Column="1" Width="170"
                                       Background="{StaticResource SurfaceElevatedBrush}"
-                                      Foreground="{StaticResource TextPrimaryBrush}"
+                                      Foreground="{StaticResource ComboBoxTextBrush}"
                                       BorderBrush="{StaticResource BorderDarkBrush}"
                                       ItemsSource="{Binding FirewallStrategyModeOptions}"
                                       SelectedIndex="{Binding FirewallStrategyModeIndex}"/>
@@ -396,7 +396,7 @@
                                        Text="{Binding Loc[settings.journal.title]}"/>
                             <ComboBox Grid.Column="1" Width="170"
                                       Background="{StaticResource SurfaceElevatedBrush}"
-                                      Foreground="{StaticResource TextPrimaryBrush}"
+                                      Foreground="{StaticResource ComboBoxTextBrush}"
                                       BorderBrush="{StaticResource BorderDarkBrush}"
                                       ItemsSource="{Binding JournalFilterOptions}"
                                       SelectedIndex="{Binding JournalFilterIndex}"/>

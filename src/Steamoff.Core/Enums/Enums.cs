@@ -153,7 +153,7 @@ public enum FirewallStrategyVariant
 /// <summary>How FallbackAwareFirewallService decides which strategy to use for an operation.</summary>
 public enum FirewallStrategyMode
 {
-    /// <summary>System decides — tries the remembered last-successful strategy first, then cascades.</summary>
+    /// <summary>System decides — tries ScriptFile first, then remembered/cascade fallbacks.</summary>
     Auto,
 
     /// <summary>Force "Вариант 1" only — no fallback.</summary>

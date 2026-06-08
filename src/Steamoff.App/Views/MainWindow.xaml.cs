@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
+using Steamoff.App.Status;
 using Steamoff.App.Tray;
 using Steamoff.App.ViewModels;
 
@@ -17,6 +18,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+        Icon = RobotTrayIconFactory.CreateBitmapSource(RobotStatusKind.Online);
         WindowChromeHelper.ApplyDarkTitleBar(this);
     }
 

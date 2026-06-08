@@ -29,6 +29,7 @@ public sealed class AppServices
     public IElevationService Elevation { get; }
     public ISettingsService Settings { get; }
     public IFirewallService Firewall { get; }
+    public ScriptFileFirewallService ScriptFileFirewall { get; }
     public ISteamDiscoveryService SteamDiscovery { get; }
     public IPathNormalizationService PathNormalization { get; }
     public ISteamPathValidator SteamPathValidator { get; }
@@ -77,11 +78,11 @@ public sealed class AppServices
         LocalizedLog = new LocalizedLogService(Log, Localization);
         var primaryFirewall = new ComFirewallService(Log);
         var secondaryFirewall = new NetSecurityFirewallService(Log);
-        var scriptFileFirewall = new ScriptFileFirewallService(new FirewallScriptFileWriter(Log), new ProcessPowerShellCommandRunner(), Log);
+        ScriptFileFirewall = new ScriptFileFirewallService(new FirewallScriptFileWriter(Log), new ProcessPowerShellCommandRunner(), Log);
         Firewall = new FallbackAwareFirewallService(
             primaryFirewall,
             secondaryFirewall,
-            scriptFileFirewall,
+            ScriptFileFirewall,
             () => _settingsSnapshot.FirewallStrategyMode,
             () => _settingsSnapshot.LastSuccessfulFirewallStrategy,
             async variant =>
@@ -91,7 +92,7 @@ public sealed class AppServices
             },
             Log,
             LocalizedLog);
-        SelfTestRunner = new FirewallSelfTestRunner(primaryFirewall, secondaryFirewall, scriptFileFirewall, Settings, Log, LocalizedLog);
+        SelfTestRunner = new FirewallSelfTestRunner(primaryFirewall, secondaryFirewall, ScriptFileFirewall, Settings, Log, LocalizedLog);
         Diagnostics = new DiagnosticsService(UserContext, Settings, Log, SteamDiscovery, Scanner, Firewall, Autostart, Localization);
         Tray = new TrayService(Log, Localization);
         Notifications = new BalloonNotificationService(() => Tray.NotifyIconForNotifications);

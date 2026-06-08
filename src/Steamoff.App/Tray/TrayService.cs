@@ -3,6 +3,7 @@ using System.Windows.Forms;
 using Steamoff.Core.Enums;
 using Steamoff.Core.Interfaces;
 using Steamoff.Core.Models;
+using Steamoff.App.Status;
 using Application = System.Windows.Application;
 
 namespace Steamoff.App.Tray;
@@ -20,7 +21,7 @@ public sealed class TrayService : ITrayService
     private readonly ILogService _log;
     private readonly ILocalizationService _localization;
     private NotifyIcon? _notifyIcon;
-    private readonly Dictionary<HealthLevel, Icon> _iconCache = new();
+    private readonly Dictionary<RobotStatusKind, Icon> _iconCache = new();
     private HealthStatus _lastStatus = new();
     private bool _lastIsReadOnly;
 
@@ -52,7 +53,7 @@ public sealed class TrayService : ITrayService
 
         _notifyIcon = new NotifyIcon
         {
-            Icon = GetIcon(HealthLevel.Unknown),
+            Icon = GetIcon(RobotStatusKind.Online),
             Visible = true,
             Text = TruncateForTooltip(_localization.GetString("status.checking")),
             ContextMenuStrip = BuildContextMenu()
@@ -71,8 +72,7 @@ public sealed class TrayService : ITrayService
             return;
         }
 
-        var level = isReadOnly ? HealthLevel.ReadOnly : status.Level;
-        _notifyIcon.Icon = GetIcon(level);
+        _notifyIcon.Icon = GetIcon(ToRobotStatusKind(status.Overall, isReadOnly));
         _notifyIcon.Text = TruncateForTooltip(BuildTooltip(status, isReadOnly));
     }
 
@@ -147,47 +147,31 @@ public sealed class TrayService : ITrayService
         return menu;
     }
 
-    private Icon GetIcon(HealthLevel level)
+    private Icon GetIcon(RobotStatusKind status)
     {
-        if (_iconCache.TryGetValue(level, out var cached))
+        if (_iconCache.TryGetValue(status, out var cached))
         {
             return cached;
         }
 
-        var color = level switch
-        {
-            HealthLevel.Ok => Color.FromArgb(0x33, 0xD1, 0x7A),
-            HealthLevel.Warning => Color.FromArgb(0xFF, 0xC8, 0x57),
-            HealthLevel.Error => Color.FromArgb(0xFF, 0x4D, 0x4F),
-            HealthLevel.Disabled => Color.FromArgb(0x8F, 0x92, 0xA1),
-            HealthLevel.ReadOnly => Color.FromArgb(0x6E, 0x8F, 0xA1),
-            _ => Color.FromArgb(0x8F, 0x92, 0xA1)
-        };
-
-        var icon = DrawDotIcon(color);
-        _iconCache[level] = icon;
+        var icon = RobotTrayIconFactory.CreateIcon(status);
+        _iconCache[status] = icon;
         return icon;
     }
 
-    private static Icon DrawDotIcon(Color color)
+    private static RobotStatusKind ToRobotStatusKind(OverallStatus status, bool isReadOnly)
     {
-        const int size = 32;
-        using var bitmap = new Bitmap(size, size);
-        using (var g = Graphics.FromImage(bitmap))
+        if (isReadOnly)
         {
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Color.Transparent);
-
-            using var fill = new SolidBrush(color);
-            using var border = new Pen(Color.FromArgb(0x17, 0x18, 0x20), 2f);
-
-            var rect = new RectangleF(3, 3, size - 6, size - 6);
-            g.FillEllipse(fill, rect);
-            g.DrawEllipse(border, rect);
+            return RobotStatusKind.Waiting;
         }
 
-        var hIcon = bitmap.GetHicon();
-        return Icon.FromHandle(hIcon);
+        return status switch
+        {
+            OverallStatus.FullyBlocked => RobotStatusKind.Offline,
+            OverallStatus.FullyUnblocked => RobotStatusKind.Online,
+            _ => RobotStatusKind.Waiting
+        };
     }
 
     public void Dispose()

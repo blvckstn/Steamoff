@@ -80,6 +80,21 @@ public sealed class ScriptFileFirewallServiceTests
     }
 
     [Fact]
+    public async Task RemoveAllManagedRulesAsync_LaunchesScriptFileWithRemoveAllOperation()
+    {
+        var runner = new CapturingPowerShellRunner();
+        var service = new ScriptFileFirewallService(new StubScriptWriter(FixedScriptPath), runner, new FakeLogService());
+
+        await service.RemoveAllManagedRulesAsync();
+
+        var invocation = Assert.Single(runner.Invocations);
+        Assert.Equal("RemoveAll", invocation.Environment["STEAMOFF_OPERATION"]);
+        Assert.Equal(FirewallConstants.RuleGroup, invocation.Environment["STEAMOFF_RULE_GROUP"]);
+        Assert.Contains("-File", invocation.Arguments);
+        Assert.Contains(FixedScriptPath, invocation.Arguments);
+    }
+
+    [Fact]
     public async Task GetCurrentStateAsync_QueriesViaScriptFileAndParsesJsonRulesAndRecognizesSteamoffConvention()
     {
         var runner = new CapturingPowerShellRunner

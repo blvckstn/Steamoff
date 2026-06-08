@@ -1,158 +1,356 @@
 # Steamoff
 
-A Windows desktop "smart network-access switch" for Steam — block or allow
-Steam (and any other apps/folders you choose) at the network level using
-**only** Microsoft Defender Firewall rules. No process killing, no DRM
-patches, no hacks: Steamoff reads and writes real Windows Firewall rules
-through the same COM API the Defender UI itself uses, and nothing else.
+![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?style=for-the-badge&logo=windows)
+![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge&logo=dotnet)
+![Firewall](https://img.shields.io/badge/Firewall-Microsoft%20Defender-33D17A?style=for-the-badge)
+![Privacy](https://img.shields.io/badge/Privacy-no%20telemetry-FF9F1A?style=for-the-badge)
 
-## What it does
-- One big toggle: **Block / Unblock Steam** — creates/removes outbound (and,
-  where relevant, inbound) Defender Firewall block rules for the full Steam
-  process set (`steam.exe`, `steamservice.exe`, `steamwebhelper.exe`,
-  `GameOverlayUI.exe`, `steamerrorreporter*.exe`, `steam_monitor.exe`, CEF
-  helper processes, etc. — discovered from the registry
-  `HKCU/HKLM\Software\Valve\Steam`).
-- **Custom targets**: add your own folders or individual `.exe` files to the
-  same on/off switch — via picker dialogs **or by dragging and dropping**
-  files/folders/`.lnk` shortcuts straight onto the Settings cards. Every path
-  goes through the same normalize → validate → de-duplicate pipeline
-  (handles quotes, env vars, `/` vs `\`, duplicated separators, UNC paths,
-  and `.lnk` resolution) and shows a live green/red/yellow/gray status
-  indicator — see `specs/003-steamoff-settings-paths-ui-fixes/`.
-- **Mini-log in the compact view**: the last 30 log lines, color-coded by
-  level, refreshed every 5 seconds, with one-click "open full log" and "copy
-  diagnostics report" actions.
-- **Live status verification**: Steamoff doesn't just remember "I created a
-  rule" — it re-reads the actual current Defender Firewall rule state every
-  time, so the displayed status always reflects reality (including if you or
-  another tool changed the rules outside the app).
-- **Tray-resident**: runs from the system tray; the compact view gives an
-  at-a-glance status pill, the big toggle, and quick access to Settings.
-- **Two views**:
-  - *Compact (Steam Switch) View* — the everyday on/off control.
-  - *Settings View* — language, modes, custom paths/executables, autostart,
-    diagnostics ("Test"/"Status").
-- **9 languages** with instant, no-restart switching: Russian (primary,
-  highest quality), English, German, French, Spanish, Italian, Portuguese,
-  Polish, and Chinese. (No Ukrainian — by design, see `ASSUMPTIONS.md` A15.)
-  English always displays as **EN**, never **GB**.
-- **First-launch language picker** — a neumorphic "choose your language"
-  dialog appears on first run; dismissing it without choosing defaults to
-  Russian (the fallback language) and the dialog never reappears.
-- **Settings editing workflow**: every change is staged in a draft you can
-  **Test** (run diagnostics against the *pending* changes before committing),
-  check **Status** against, **Apply** (save, keep editing), **Save** (save
-  and close), or **Cancel** (discard everything, including any previewed
-  language switch, and roll back to the last saved state).
-- **Autostart** via Windows Task Scheduler (no registry Run-key hacks).
-- **JSON-persisted settings** under `%ProgramData%\Steamoff` (falls back to
-  `%AppData%\Steamoff` if that's not writable).
+Steamoff is a small Windows utility for quickly cutting Steam off from the
+internet through Microsoft Defender Firewall rules.
 
-## What it deliberately does NOT do
-- Does not kill, suspend, or patch the Steam process or any of its files.
-- Does not use `netsh`/PowerShell shell-outs for firewall changes (COM
-  `INetFwPolicy2` only — see `ASSUMPTIONS.md` A2).
-- Does not phone home: no telemetry, no cloud APIs, fully offline.
-- Does not touch firewall rules it didn't create itself.
+It is built for people who like the useful parts of Steam Offline Mode, but want
+a more explicit network switch: one click to block Steam, one click to let it
+back online. No router changes, no unplugging Ethernet, no killing Steam, no
+editing game files.
 
-## Tech stack
-- .NET 8 (LTS), C#, WPF + MVVM (hand-rolled `ObservableObject`/`RelayCommand`)
-- Self-contained, single-file `win-x64` publish (no runtime install required
-  on the target machine)
-- xUnit test suite
-- Layered solution: `Steamoff.Core` (models/interfaces/localization data) →
-  `Steamoff.Infrastructure` (firewall/settings/autostart/process services) →
-  `Steamoff.App` (WPF UI, ViewModels, tray) → `Steamoff.Tests`
+Steamoff can also block any extra apps or folders you add, so the same switch can
+be used for games, launchers, tools, test builds, or anything else that should
+temporarily stay offline.
 
-## Project layout
+> Русская версия ниже.
+
+---
+
+## Why This Exists
+
+Common searches around this problem look like this:
+
+> "Steam offline mode not working"
+>
+> "force Steam to stay offline"
+>
+> "block Steam internet access with Windows Firewall"
+>
+> "stop Steam from updating a game"
+>
+> "block a game from accessing the internet"
+>
+> "quickly disable internet for one app on Windows"
+
+Steam's built-in Offline Mode is useful, but it is still a client feature. It can
+depend on login state, cached credentials, update state, and what Steam decides
+it needs to validate before launching.
+
+Steamoff works at the Windows firewall layer instead. When offline mode is
+enabled, Steam and selected apps simply do not get network access. That makes the
+behavior more predictable when the goal is network isolation rather than social
+"appear offline" status.
+
+It is not a Steam patch, not a bypass tool, and not a DRM modification. It is a
+local firewall-rule switch.
+
+---
+
+## What Steamoff Does
+
+- **One clear offline switch**  
+  Turn Steam network access off or on from a compact desktop window or tray menu.
+
+- **PowerShell ScriptFile strategy first**  
+  The primary rule engine generates and runs a local PowerShell firewall script
+  with process-scoped execution policy bypass. This proved the most reliable
+  path for applying and removing Microsoft Defender Firewall rules on Windows.
+
+- **Blocks the real Steam process set**  
+  Steamoff targets Steam itself and its helper processes, including Steam Client
+  WebHelper and other discovered Steam executables.
+
+- **Custom apps and folders**  
+  Add individual `.exe` files or whole folders. Steamoff can scan folders and
+  include executables inside them, so you can quickly isolate a game, launcher,
+  mod tool, benchmark, or test app.
+
+- **Inbound and outbound option**  
+  By default Steamoff blocks outbound access. You can also enable inbound rule
+  creation when you want stricter isolation.
+
+- **Rule coverage display**  
+  The main window shows how many expected firewall rules are currently active,
+  so you can see whether blocking is complete, partial, or not configured.
+
+- **Tray-first workflow**  
+  Steamoff lives in the system tray. You can enable autostart and choose whether
+  it starts minimized to tray after the first setup.
+
+- **Startup is safe by design**  
+  On first launch, the main window always opens so you can see what the app is
+  and choose settings. Later launches can start quietly in the tray if enabled.
+
+- **Short local log and diagnostics**  
+  The main window includes a compact log with color-coded status lines. Settings
+  include diagnostics for Steam path, firewall access, autostart, tracked files,
+  and rule state.
+
+- **Multilingual UI**  
+  Steamoff includes localized UI resources for Russian, English, German, French,
+  Spanish, Italian, Portuguese, Polish, and Chinese.
+
+---
+
+## Good Use Cases
+
+Steamoff is useful when you want to:
+
+- play Steam games without Steam talking to the network;
+- keep Steam from downloading updates until you decide;
+- test how an app behaves without internet;
+- block a specific game launcher while keeping the rest of Windows online;
+- temporarily isolate mod tools, benchmarks, or executables from a folder;
+- switch Steam online/offline without opening Windows Defender Firewall manually;
+- keep a repeatable firewall setup instead of recreating rules by hand.
+
+It is especially handy for gamers, tinkerers, modders, QA testers, and anyone
+who wants a simple "this app is offline now" button.
+
+---
+
+## Privacy And Safety
+
+Steamoff is local-first:
+
+- no telemetry;
+- no analytics;
+- no accounts;
+- no cloud backend;
+- no network calls from the app itself;
+- no personal data collection;
+- no Steam credential access;
+- no modification of Steam files or game files.
+
+Settings and logs are stored locally under `%ProgramData%\Steamoff` with an
+`%AppData%\Steamoff` fallback if needed.
+
+Steamoff only manages firewall rules it owns. The managed rules use the
+`Steamoff` firewall group and deterministic Steamoff rule names, so cleanup is
+scoped to its own rules.
+
+Windows Defender Firewall changes require administrator rights. That is normal
+for any app that creates or removes firewall rules.
+
+Tested on Windows 10 and Windows 11.
+
+---
+
+## How It Works
+
+Steamoff uses Microsoft Defender Firewall as the source of truth.
+
+When you enable offline mode, Steamoff:
+
+1. builds the list of Steam targets and your custom targets;
+2. generates local firewall rules for those executables;
+3. applies them through the PowerShell ScriptFile strategy;
+4. reads back the actual firewall state;
+5. shows rule coverage in the UI.
+
+When you disable offline mode, Steamoff removes the rules it created earlier and
+verifies the state again.
+
+The result is intentionally boring in the best way: Windows decides network
+access through its normal firewall mechanism, and Steamoff gives you a fast UI
+for that switch.
+
+---
+
+## Download / Release Build
+
+The release folder contains two variants:
+
+```text
+src/Steamoff.App/release/
+  Steamoff-with-dotnet-runtime/      Steamoff.exe + README-RUN.txt
+  Steamoff-without-dotnet-runtime/   Steamoff.exe + README-RUN.txt
+  release-manifest.json
+  release-log.txt
 ```
-src/Steamoff.Core/            domain models, interfaces, LanguageManager,
-                              LocalizedStringProvider, embedded translation
-                              tables (Resources/Localization/{code}.json)
-src/Steamoff.Infrastructure/  IFirewallService (COM INetFwPolicy2 backend +
-                              documented Netsh fallback), JsonSettingsService,
-                              autostart, Steam discovery/diagnostics
-src/Steamoff.App/             WPF app: Views, ViewModels, LocalizationProxy,
-                              tray (TrayService), App.xaml.cs orchestration
-tests/Steamoff.Tests/         xUnit tests + fakes (FakeLogService,
-                              FakeLocalizationService) in TestSupport/
-specs/                        SpecKit docs:
-                              001-steamoff-smart-firewall-switch (core app)
-                              002-steamoff-localization-settings
-                              003-steamoff-settings-paths-ui-fixes (this feature)
-steamOff.ps1                  legacy reference script (kept untouched, never
-                              invoked by the app — see ASSUMPTIONS.md A6)
-```
 
-## Building & running
+- **Steamoff-with-dotnet-runtime**: larger, self-contained, recommended for most
+  users.
+- **Steamoff-without-dotnet-runtime**: smaller, requires the matching .NET
+  desktop runtime installed on Windows.
+
+Run `Steamoff.exe` as administrator.
+
+---
+
+## Build From Source
+
 ```powershell
+git clone https://github.com/blvckstn/Steamoff.git
+cd Steamoff
+
 dotnet restore
-dotnet build -c Release
-dotnet test -c Release   # set DOTNET_ROLL_FORWARD=LatestMajor and
-                         # DOTNET_ROLL_FORWARD_TO_PRERELEASE=1 first if your
-                         # machine lacks the exact net8.0 desktop runtime —
-                         # see KNOWN_LIMITATIONS.md
-dotnet publish src/Steamoff.App/Steamoff.App.csproj -c Release -r win-x64 `
-  --self-contained true -p:PublishSingleFile=true `
-  -p:IncludeNativeLibrariesForSelfExtract=true
-```
-The published EXE lands in
-`src/Steamoff.App/bin/Release/net8.0-windows/win-x64/publish/Steamoff.App.exe`.
-Run it elevated (it will prompt for UAC on its own) — Defender Firewall rule
-management requires Administrator rights.
+dotnet build Steamoff.slnx
+dotnet test --filter "Category!=RequiresAdmin"
 
-## Producing a release build (`build-release.ps1`)
-Run from the repo root (it verifies `Steamoff.slnx` exists in the working
-directory and refuses to run anywhere else):
-```powershell
+Set-ExecutionPolicy -Scope Process Bypass -Force
 .\build-release.ps1
 ```
-This single script runs the full release pipeline end to end: `dotnet
-restore`/`build -c Release`/`test -c Release` (with the `DOTNET_ROLL_FORWARD`
-workaround already set internally), closes any currently-running `Steamoff`
-instance it finds under its own `bin\`/`release\`/`publish*\` trees (it never
-touches `steam.exe` or anything outside the repo — see ASSUMPTIONS.md A19/A24),
-cleans and recreates `src/Steamoff.App/release/`, and publishes **both**
-required variants there:
 
+The release script restores, builds, tests, publishes both release variants, and
+writes SHA-256 hashes to `release-manifest.json`.
+
+---
+
+## Project Layout
+
+```text
+src/Steamoff.Core/            models, interfaces, localization resources
+src/Steamoff.Infrastructure/  firewall, PowerShell script writer, settings,
+                              diagnostics, Steam discovery, autostart
+src/Steamoff.App/             WPF UI, view models, tray, startup orchestration
+tests/Steamoff.Tests/         xUnit tests and test doubles
+specs/                        feature specs, contracts, quickstarts
 ```
-src/Steamoff.App/release/
-  Steamoff-with-dotnet-runtime/      Steamoff.exe + README-RUN.txt   (self-contained, ~68 MB)
-  Steamoff-without-dotnet-runtime/   Steamoff.exe + README-RUN.txt   (framework-dependent, ~0.5 MB)
-  release-manifest.json              versions, sizes, SHA-256 hashes of both outputs
-  release-log.txt                    timestamped, bilingual (RU/EN) pipeline log
+
+---
+
+# Steamoff ^{RU}
+
+Steamoff — небольшая Windows-утилита для быстрого отключения Steam от интернета
+через правила Microsoft Defender Firewall.
+
+Она сделана для тех, кому нравятся практические плюсы автономного режима Steam,
+но нужен более понятный и быстрый сетевой переключатель: один клик — Steam без
+интернета, ещё один клик — Steam снова в сети.
+
+При этом Steamoff умеет блокировать не только Steam. Можно добавить свои `.exe`
+файлы или целые папки с программами, которым временно нужно запретить доступ в
+интернет.
+
+---
+
+## Какую проблему решает Steamoff
+
+Похожие запросы часто выглядят так:
+
+> «Steam offline mode не работает»
+>
+> «как принудительно оставить Steam offline»
+>
+> «как заблокировать интернет Steam через firewall»
+>
+> «как запретить Steam обновлять игру»
+>
+> «как заблокировать игре доступ в интернет»
+>
+> «быстро отключить интернет только одному приложению Windows»
+
+Встроенный автономный режим Steam полезен, но это всё ещё режим внутри клиента.
+Он может зависеть от авторизации, кэша, состояния обновлений и того, что Steam
+решит проверить перед запуском.
+
+Steamoff работает ниже — на уровне Windows Firewall. Если автономный режим
+включён, Steam и выбранные приложения просто не получают сетевой доступ. Поэтому
+для задачи «не пускать приложение в интернет» поведение получается более
+предсказуемым, чем надежда только на внутренний режим Steam.
+
+Это не патч Steam, не обход DRM и не вмешательство в файлы игр. Это локальный
+переключатель firewall-правил.
+
+---
+
+## Ключевые возможности
+
+- **Две понятные кнопки: Вкл / Выкл**  
+  Включить автономный режим или вернуть Steam в сеть.
+
+- **Надёжный PowerShell ScriptFile-способ**  
+  Steamoff применяет правила через локально сгенерированный PowerShell-сценарий.
+  Для текущего проекта этот способ выбран основным, потому что на Windows он
+  работает стабильнее остальных вариантов применения firewall-правил.
+
+- **Блокировка Steam и его helper-процессов**  
+  Учитываются Steam, Steam Client WebHelper, сервисы и вспомогательные
+  исполняемые файлы Steam.
+
+- **Свои приложения и папки**  
+  Можно добавить отдельный `.exe` или папку. Это удобно для игр, лаунчеров,
+  мод-инструментов, тестовых билдов и любых программ, которым нужно временно
+  закрыть доступ в интернет.
+
+- **Проверка результата**  
+  Steamoff не просто «помнит», что создал правила. Он читает фактическое
+  состояние Windows Firewall и показывает, сколько правил активно.
+
+- **Трей и автозапуск**  
+  Приложение может жить в трее, запускаться вместе с Windows и после первого
+  запуска стартовать свёрнутым.
+
+- **Первый запуск всегда с окном**  
+  Чтобы пользователь понимал, что запущено и какие настройки включены.
+
+- **Локальный журнал и диагностика**  
+  В главном окне есть короткий журнал событий. В настройках — диагностика
+  Steam-пути, firewall-доступа, автозапуска и правил.
+
+- **9 языков интерфейса**  
+  RU, EN, DE, FR, ES, IT, PT, PL, ZH.
+
+---
+
+## Для кого это
+
+Steamoff может пригодиться, если вы хотите:
+
+- играть в Steam-игры без сетевого доступа Steam;
+- временно остановить обновления Steam/игры;
+- проверить, как приложение ведёт себя без интернета;
+- быстро заблокировать конкретную игру или launcher;
+- оставить Windows онлайн, но отключить от сети только выбранные программы;
+- не лазить каждый раз вручную в Windows Defender Firewall;
+- иметь аккуратный повторяемый набор firewall-правил.
+
+Это утилита для геймеров, моддеров, тестировщиков, гиков и всех, кто любит
+простые инструменты с понятным поведением.
+
+---
+
+## Приватность и спокойствие
+
+Steamoff работает локально:
+
+- не выходит в интернет;
+- не собирает личные данные;
+- не отправляет телеметрию;
+- не использует аккаунты;
+- не обращается к облаку;
+- не читает логин/пароль Steam;
+- не меняет файлы Steam или игр.
+
+Настройки и логи лежат локально в `%ProgramData%\Steamoff` или, если туда нет
+доступа, в `%AppData%\Steamoff`.
+
+Steamoff управляет только своими firewall-правилами. Они находятся в группе
+`Steamoff`, поэтому приложение может отличить свои правила от чужих и не трогать
+настройки, которые пользователь создал вручную.
+
+Протестировано на Windows 10 и Windows 11.
+
+---
+
+## Сборка
+
+```powershell
+git clone https://github.com/blvckstn/Steamoff.git
+cd Steamoff
+
+dotnet restore
+dotnet build Steamoff.slnx
+dotnet test --filter "Category!=RequiresAdmin"
+
+Set-ExecutionPolicy -Scope Process Bypass -Force
+.\build-release.ps1
 ```
 
-`release\` always contains the **latest** build only — every run empties and
-repopulates it from scratch (see ASSUMPTIONS.md A20/A23 for why the output is
-named `Steamoff.exe` and where `release-manifest.json` lives). The script
-exits non-zero and writes an `ОШИБКА`/`ERROR` line to the log on the first
-failing step (wrong working directory, failing tests, build errors, a stuck
-running instance, etc.) — see `contracts/release-build-flow.md` in
-`specs/004-steamoff-localized-logs-release-flow/` for the exact contract this
-script implements, and `ReleaseScriptTests.cs` for its automated coverage.
-
-## Settings & data location
-`%ProgramData%\Steamoff\settings.json` (or `%AppData%\Steamoff\settings.json`
-as a fallback). The file is versioned (`CurrentVersion`); older files are
-migrated in place on load — see `ASSUMPTIONS.md` A3/A14 and
-`specs/002-steamoff-localization-settings/data-model.md`.
-
-## Documentation
-- `ASSUMPTIONS.md` — every autonomous design decision, with rationale
-- `IMPLEMENTATION_LOG.md` — every build error hit and how it was fixed
-- `KNOWN_LIMITATIONS.md` — honest current limitations
-- `FINAL_REPORT.md` — end-to-end reports for the localization/settings
-  feature (002), the settings-paths/UI-fixes feature (003), and the
-  localized-logs/release-flow feature (004)
-- `specs/004-steamoff-localized-logs-release-flow/` — SpecKit spec/plan/
-  research/data-model/quickstart/tasks/contracts for the language-restart
-  state machine, localized logging (journal panel + 14 settings actions),
-  localized diagnostics, and the `build-release.ps1` release pipeline
-- `specs/003-steamoff-settings-paths-ui-fixes/` — SpecKit spec/plan/research/
-  data-model/quickstart/tasks/contracts for the Settings paths (Steam path,
-  Folders, EXE Files), drag&drop, mini-log, and UI-fixes feature
-- `specs/002-steamoff-localization-settings/` — SpecKit spec/plan/research/
-  data-model/quickstart/tasks/contracts for the localization feature
-- `specs/001-steamoff-smart-firewall-switch/` — SpecKit docs for the core app
+Готовые сборки появляются в `src/Steamoff.App/release/`.

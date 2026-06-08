@@ -121,7 +121,7 @@ research.md R4:
 | Owner/writer | `FirewallScriptFileWriter` (new infrastructure helper) |
 | Freshness check | SHA-256 of on-disk content vs. the hash of the content this build expects (embedded constant) |
 | Refresh trigger | Missing, unreadable, or hash-mismatched — rewritten atomically (temp file + `File.Move` overwrite) |
-| Content contract | First statement: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force` (R1); reads
+| Content contract | First statement: `Set-ExecutionPolicy -Scope Process Bypass -Force` (R1); reads
 all per-operation data exclusively from `STEAMOFF_*` environment variables (R3); creates/queries/removes rules
 exclusively via `FirewallConstants.RuleGroup` + `FirewallRuleNameBuilder.Build(...)` — **never** the prototype
 `steamOff.ps1`'s `"SteamOfflineToggle"`/`"Steam Offline IN/OUT - <exe>"` naming (FR-002, carried over verbatim from

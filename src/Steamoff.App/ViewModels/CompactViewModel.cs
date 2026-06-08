@@ -4,6 +4,8 @@ using System.Reflection;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Steamoff.App.Localization;
+using Steamoff.App.Logging;
+using Steamoff.App.Status;
 using Steamoff.Core.Enums;
 using Steamoff.Core.Localization;
 using Steamoff.Core.Logging;
@@ -26,6 +28,7 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
     private readonly AppServices _services;
     private readonly DispatcherTimer _refreshTimer;
     private readonly DispatcherTimer _logRefreshTimer;
+    private readonly DispatcherTimer _iconCycleTimer;
 
     private AppSettings _settings;
     private HealthStatus _status = HealthStatus.Unknown;
@@ -34,8 +37,11 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
     private bool _isCheckingStatus;
     private bool _isLogExpanded;
     private bool _hasCompletedInitialStatusCheck;
+    private bool _hasAppliedModeThisSession;
     private int _activeExpectedRuleCount;
     private int _expectedRuleCount;
+    private int _iconCycleIndex;
+    private RobotStatusKind _statusIconKind = RobotStatusKind.Waiting;
 
     public CompactViewModel(AppServices services, AppSettings settings, UserContextInfo userContext)
     {
@@ -44,7 +50,11 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         _userContext = userContext;
         Loc = new LocalizationProxy(services.Localization);
 
-        ToggleCommand = new AsyncRelayCommand(ToggleAsync, () => !IsBusy && _userContext.HasFirewallAccess);
+        ToggleCommand = new AsyncRelayCommand(
+            () => SetOfflineModeAsync(_settings.DesiredState == DesiredState.Blocked ? DesiredState.Unblocked : DesiredState.Blocked),
+            () => !IsBusy && _userContext.HasFirewallAccess);
+        EnableOfflineCommand = new AsyncRelayCommand(() => SetOfflineModeAsync(DesiredState.Blocked), () => !IsBusy && _userContext.HasFirewallAccess);
+        DisableOfflineCommand = new AsyncRelayCommand(() => SetOfflineModeAsync(DesiredState.Unblocked), () => !IsBusy && _userContext.HasFirewallAccess);
         OpenSettingsCommand = new RelayCommand(() => SettingsRequested?.Invoke());
         ExpandLogCommand = new RelayCommand(() => IsLogExpanded = !IsLogExpanded);
         OpenFullLogCommand = new RelayCommand(OpenFullLog);
@@ -57,7 +67,6 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
             Interval = TimeSpan.FromSeconds(Math.Max(10, settings.CheckIntervalSeconds))
         };
         _refreshTimer.Tick += async (_, _) => await RefreshStatusAsync().ConfigureAwait(true);
-        _refreshTimer.Start();
 
         _logRefreshTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -65,6 +74,12 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         };
         _logRefreshTimer.Tick += async (_, _) => await RefreshRecentLogLinesAsync().ConfigureAwait(true);
         _logRefreshTimer.Start();
+
+        _iconCycleTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
+        _iconCycleTimer.Tick += (_, _) => CycleStatusIcon();
 
         _ = RefreshRecentLogLinesAsync();
     }
@@ -74,12 +89,20 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
     public LocalizationProxy Loc { get; }
 
     public ICommand ToggleCommand { get; }
+    public ICommand EnableOfflineCommand { get; }
+    public ICommand DisableOfflineCommand { get; }
     public ICommand OpenSettingsCommand { get; }
     public ICommand ExpandLogCommand { get; }
     public ICommand OpenFullLogCommand { get; }
     public ICommand CopyDiagnosticsCommand { get; }
 
     public ObservableCollection<string> RecentLogLines { get; } = new();
+
+    public RobotStatusKind StatusIconKind
+    {
+        get => _statusIconKind;
+        private set => SetProperty(ref _statusIconKind, value);
+    }
 
     public bool IsLogExpanded
     {
@@ -105,7 +128,11 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
             if (SetProperty(ref _isBusy, value))
             {
                 ((AsyncRelayCommand)ToggleCommand).RaiseCanExecuteChanged();
+                ((AsyncRelayCommand)EnableOfflineCommand).RaiseCanExecuteChanged();
+                ((AsyncRelayCommand)DisableOfflineCommand).RaiseCanExecuteChanged();
                 OnPropertyChanged(nameof(ToggleButtonText));
+                OnPropertyChanged(nameof(OfflineOnButtonText));
+                OnPropertyChanged(nameof(OfflineOffButtonText));
                 OnPropertyChanged(nameof(IsActivityVisible));
                 OnPropertyChanged(nameof(ActivityText));
             }
@@ -186,6 +213,12 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         ? Loc["compact.statusChecking"]
         : (IsBlocked ? Loc["compact.unblockButton"] : Loc["compact.blockButton"]);
 
+    public string OfflineModeTitle => Loc["compact.offlineModeTitle"];
+
+    public string OfflineOnButtonText => Loc["compact.offlineOnButton"];
+
+    public string OfflineOffButtonText => Loc["compact.offlineOffButton"];
+
     public string ModeText => Loc.GetFormatted("compact.modeLabel", ModeDisplayName(_settings.EnforcementMode));
 
     public string AdminStatusText => _userContext.HasFirewallAccess ? Loc["compact.adminOk"] : Loc["compact.adminMissing"];
@@ -213,6 +246,9 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(ToggleButtonText));
+        OnPropertyChanged(nameof(OfflineModeTitle));
+        OnPropertyChanged(nameof(OfflineOnButtonText));
+        OnPropertyChanged(nameof(OfflineOffButtonText));
         OnPropertyChanged(nameof(ModeText));
         OnPropertyChanged(nameof(AdminStatusText));
         OnPropertyChanged(nameof(VersionText));
@@ -231,7 +267,7 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
             RecentLogLines.Clear();
             foreach (var line in lines)
             {
-                RecentLogLines.Add(line);
+                RecentLogLines.Add(LogLineDisplay.ToDisplayText(line));
             }
 
             OnPropertyChanged(nameof(HasRecentLogLines));
@@ -277,6 +313,8 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
     {
         _userContext = userContext;
         ((AsyncRelayCommand)ToggleCommand).RaiseCanExecuteChanged();
+        ((AsyncRelayCommand)EnableOfflineCommand).RaiseCanExecuteChanged();
+        ((AsyncRelayCommand)DisableOfflineCommand).RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(AdminStatusText));
         OnPropertyChanged(nameof(HasAdminAccess));
         OnPropertyChanged(nameof(Level));
@@ -292,7 +330,7 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
         IsCheckingStatus = true;
         try
         {
-            _services.Log.Info("Проверка состояния firewall: начало.");
+            _services.Log.Info("Status check started.");
             var targets = await TargetBuilder.BuildAllTargetsAsync(_services, _settings, ct).ConfigureAwait(true);
             var desired = new DesiredFirewallState
             {
@@ -309,9 +347,13 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
             (_activeExpectedRuleCount, _expectedRuleCount) = CountExpectedActiveRules(targets, actual.Rules, _settings.DirectionMode);
             Status = _services.StatusEvaluator.Evaluate(desired, actual, _userContext, _settings.AdditionalFolders, _settings.AdditionalExecutables);
             OnPropertyChanged(nameof(CoverageDetailText));
+            _services.Tray.UpdateStatus(Status, !_userContext.HasFirewallAccess);
+            if (!IsBusy && _hasAppliedModeThisSession)
+            {
+                StatusIconKind = ToRobotStatusKind(Status.Overall);
+            }
 
-            _services.Log.Info(
-                $"Проверка состояния firewall: завершена. Желательное состояние={_settings.DesiredState}; целей={targets.Count}; ожидаемых правил={_expectedRuleCount}; активных ожидаемых правил={_activeExpectedRuleCount}; найдено правил группы Steamoff={actual.Rules.Count}; итог={Status.Overall}; покрытие={Status.CoveragePercent:0.0}%.");
+            _services.Log.Info($"Status: {Status.Overall}, rules {_activeExpectedRuleCount}/{_expectedRuleCount}, targets {targets.Count}.");
 
             if (Status.Overall == OverallStatus.DriftDetected && !wasDrifting && _hasCompletedInitialStatusCheck)
             {
@@ -320,16 +362,14 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
 
             if (Status.Overall == OverallStatus.DriftDetected && !_hasCompletedInitialStatusCheck)
             {
-                _services.Log.Info("Первичная проверка обнаружила частичное совпадение состояния. Предупреждение в журнал не добавлено: стартовый экран показывает фактическое количество правил.");
+                _services.Log.Info($"Startup status is partial: rules {_activeExpectedRuleCount}/{_expectedRuleCount}.");
             }
 
             _hasCompletedInitialStatusCheck = true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Core.Exceptions.FirewallOperationException)
         {
-            _services.Log.Error(
-                $"Диагностика ошибки проверки состояния: сохраненное состояние={_settings.DesiredState}; последний статус={Status.Overall}; активных ожидаемых правил={_activeExpectedRuleCount}/{_expectedRuleCount}; ошибка={ex.GetType().Name}: {ex.Message}");
-            _services.Log.Error("Не удалось обновить статус firewall.", ex);
+            _services.Log.Error($"Status check failed: {ex.Message}", ex);
             Status = new HealthStatus
             {
                 Level = HealthLevel.Error,
@@ -342,6 +382,86 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
             IsCheckingStatus = false;
         }
     }
+
+    private async Task SetOfflineModeAsync(DesiredState requestedState)
+    {
+        StartIconCycle();
+        IsBusy = true;
+        try
+        {
+            var targets = await TargetBuilder.BuildAllTargetsAsync(_services, _settings, default).ConfigureAwait(true);
+            _services.Log.Info($"PowerShell: {(requestedState == DesiredState.Blocked ? "enable" : "disable")} offline, targets {targets.Count}, rules {ExpectedRuleCount(targets, _settings.DirectionMode)}.");
+
+            if (requestedState == DesiredState.Blocked)
+            {
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallBlockStarted).ConfigureAwait(true);
+                await _services.ScriptFileFirewall.ApplyBlockAsync(targets, _settings.DirectionMode).ConfigureAwait(true);
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallBlockCompleted).ConfigureAwait(true);
+                _services.Notifications.Show(Loc["notification.blockedTitle"], Loc["notification.blockedBody"]);
+            }
+            else
+            {
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallUnblockStarted).ConfigureAwait(true);
+                await _services.ScriptFileFirewall.RemoveAllManagedRulesAsync().ConfigureAwait(true);
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallUnblockCompleted).ConfigureAwait(true);
+                _services.Notifications.Show(Loc["notification.unblockedTitle"], Loc["notification.unblockedBody"]);
+            }
+
+            _settings.DesiredState = requestedState;
+            await _services.Settings.SaveAsync(_settings).ConfigureAwait(true);
+            OnPropertyChanged(nameof(IsBlocked));
+            OnPropertyChanged(nameof(ToggleButtonText));
+
+            await RefreshStatusAsync().ConfigureAwait(true);
+            _hasAppliedModeThisSession = true;
+            StatusIconKind = requestedState == DesiredState.Blocked ? RobotStatusKind.Offline : RobotStatusKind.Online;
+            _services.Log.Info($"PowerShell done: {Status.Overall}, rules {_activeExpectedRuleCount}/{_expectedRuleCount}.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Core.Exceptions.FirewallOperationException)
+        {
+            _services.Log.Error($"PowerShell failed: {ex.Message}", ex);
+            await _services.LocalizedLog.LogAsync(
+                requestedState == DesiredState.Blocked ? LogEventKey.FirewallBlockFailed : LogEventKey.FirewallUnblockFailed,
+                ex.Message).ConfigureAwait(true);
+            Status = new HealthStatus
+            {
+                Level = HealthLevel.Error,
+                Overall = OverallStatus.Error,
+                Message = ex.Message
+            };
+        }
+        finally
+        {
+            StopIconCycle();
+            IsBusy = false;
+        }
+    }
+
+    private void StartIconCycle()
+    {
+        _iconCycleIndex = 0;
+        CycleStatusIcon();
+        _iconCycleTimer.Start();
+    }
+
+    private void StopIconCycle()
+    {
+        _iconCycleTimer.Stop();
+    }
+
+    private void CycleStatusIcon()
+    {
+        var cycle = new[] { RobotStatusKind.Online, RobotStatusKind.Offline, RobotStatusKind.Waiting };
+        StatusIconKind = cycle[_iconCycleIndex % cycle.Length];
+        _iconCycleIndex++;
+    }
+
+    private static RobotStatusKind ToRobotStatusKind(OverallStatus status) => status switch
+    {
+        OverallStatus.FullyBlocked => RobotStatusKind.Offline,
+        OverallStatus.FullyUnblocked => RobotStatusKind.Online,
+        _ => RobotStatusKind.Waiting
+    };
 
     private async Task ToggleAsync()
     {
@@ -447,6 +567,7 @@ public sealed class CompactViewModel : ObservableObject, IDisposable
     {
         _refreshTimer.Stop();
         _logRefreshTimer.Stop();
+        _iconCycleTimer.Stop();
         _services.Localization.LanguageChanged -= OnLanguageChanged;
     }
 }

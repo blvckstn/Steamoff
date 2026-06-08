@@ -28,11 +28,13 @@ public sealed class FallbackAwareFirewallService : IFirewallService
     private const int VerificationAttempts = 3;
     private static readonly TimeSpan VerificationRetryDelay = TimeSpan.FromMilliseconds(700);
 
+    // User-confirmed priority: the generated PowerShell .ps1 strategy is the
+    // most reliable path on this machine, so Auto must try it before COM.
     private static readonly FirewallStrategyVariant[] CanonicalOrder =
     {
-        FirewallStrategyVariant.Primary,
+        FirewallStrategyVariant.ScriptFile,
         FirewallStrategyVariant.Secondary,
-        FirewallStrategyVariant.ScriptFile
+        FirewallStrategyVariant.Primary
     };
 
     private readonly IFirewallService _primary;
@@ -252,15 +254,19 @@ public sealed class FallbackAwareFirewallService : IFirewallService
 
     private static IReadOnlyList<FirewallStrategyVariant> BuildAutoTryOrder(FirewallStrategyVariant? remembered)
     {
-        if (remembered is null)
+        var order = new List<FirewallStrategyVariant>(CanonicalOrder.Length)
         {
-            return CanonicalOrder;
+            FirewallStrategyVariant.ScriptFile
+        };
+
+        if (remembered is not null && !order.Contains(remembered.Value))
+        {
+            order.Add(remembered.Value);
         }
 
-        var order = new List<FirewallStrategyVariant>(CanonicalOrder.Length) { remembered.Value };
         foreach (var variant in CanonicalOrder)
         {
-            if (variant != remembered.Value)
+            if (!order.Contains(variant))
             {
                 order.Add(variant);
             }

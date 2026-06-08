@@ -26,6 +26,8 @@ public partial class App : System.Windows.Application
     private AppSettings? _settings;
     private MainWindow? _mainWindow;
     private SettingsWindow? _settingsWindow;
+    private StartupOverlayWindow? _startupOverlayWindow;
+    private bool _startedFromTrayArgument;
 
     /// <summary>True once Exit has been requested — lets MainWindow distinguish "hide to tray" from a real shutdown.</summary>
     public bool IsExiting { get; private set; }
@@ -38,6 +40,7 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        _startedFromTrayArgument = e.Args.Any(arg => string.Equals(arg, "--tray", StringComparison.OrdinalIgnoreCase));
 
         if (!AcquireSingleInstanceLock())
         {
@@ -61,22 +64,18 @@ public partial class App : System.Windows.Application
         try
         {
             _settings = await services.Settings.LoadAsync().ConfigureAwait(true);
+            var isFirstLaunch = !_settings.IsFirstLaunchCompleted;
             services.RefreshSettingsSnapshot(_settings);
             services.Localization.SetLanguage(_settings.Language);
             await services.LocalizedLog.LogAsync(LogEventKey.AppStarted).ConfigureAwait(true);
 
-            if (!_settings.IsFirstLaunchCompleted)
+            if (isFirstLaunch)
             {
                 await RunFirstLaunchDialogAsync(services, _settings).ConfigureAwait(true);
             }
 
-            // First-launch self-test (FR-010): probes all three firewall strategies once,
-            // pre-seeds "last successful strategy" for Auto mode, and re-loads settings so
-            // the freshly-persisted FirewallSelfTest/LastSuccessfulFirewallStrategy values
-            // are reflected before the main window can trigger any real block/unblock.
-            await services.SelfTestRunner.RunIfNeededAsync().ConfigureAwait(true);
-            _settings = await services.Settings.LoadAsync().ConfigureAwait(true);
-            services.RefreshSettingsSnapshot(_settings);
+            _startupOverlayWindow = new StartupOverlayWindow();
+            _startupOverlayWindow.Show();
 
             services.Tray.Initialize();
             WireTray(services);
@@ -88,7 +87,7 @@ public partial class App : System.Windows.Application
             _mainWindow.ViewModel.SettingsRequested += OpenSettings;
             services.Log.Info($"StartupAsync: главное окно создано (_mainWindow назначено). StartMinimizedToTray={_settings.StartMinimizedToTray}.");
 
-            if (!_settings.StartMinimizedToTray)
+            if (ShouldShowMainWindowOnStartup(_settings, isFirstLaunch, _startedFromTrayArgument))
             {
                 _mainWindow.Show();
                 services.Log.Info($"StartupAsync: вызван Show() при запуске. IsVisible={_mainWindow.IsVisible}, WindowState={_mainWindow.WindowState}.");
@@ -96,13 +95,29 @@ public partial class App : System.Windows.Application
 
             await _mainWindow.ViewModel.RefreshStatusAsync().ConfigureAwait(true);
             services.Tray.UpdateStatus(BuildHealthSnapshot(_mainWindow), !userContext.HasFirewallAccess);
+            CloseStartupOverlay();
         }
         catch (Exception ex)
         {
+            CloseStartupOverlay();
             services.Log.Error("StartupAsync: исключение при запуске приложения — главное окно могло не создаться.", ex);
             throw;
         }
     }
+
+    private void CloseStartupOverlay()
+    {
+        if (_startupOverlayWindow is null)
+        {
+            return;
+        }
+
+        _startupOverlayWindow.Close();
+        _startupOverlayWindow = null;
+    }
+
+    public static bool ShouldShowMainWindowOnStartup(AppSettings settings, bool isFirstLaunch, bool startedFromTrayArgument) =>
+        isFirstLaunch || !settings.StartMinimizedToTray || !startedFromTrayArgument;
 
     private async Task RunFirstLaunchDialogAsync(AppServices services, AppSettings settings)
     {
@@ -125,8 +140,8 @@ public partial class App : System.Windows.Application
         services.Tray.LogsRequested += () => OpenLogsFolder(services);
         services.Tray.ExitRequested += () => ExitApplication();
 
-        services.Tray.BlockRequested += () => _mainWindow?.ViewModel.ToggleCommand.Execute(null);
-        services.Tray.UnblockRequested += () => _mainWindow?.ViewModel.ToggleCommand.Execute(null);
+        services.Tray.BlockRequested += () => _mainWindow?.ViewModel.EnableOfflineCommand.Execute(null);
+        services.Tray.UnblockRequested += () => _mainWindow?.ViewModel.DisableOfflineCommand.Execute(null);
     }
 
     private void ShowMainWindow()

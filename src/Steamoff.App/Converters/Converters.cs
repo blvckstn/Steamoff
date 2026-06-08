@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
+using Steamoff.App.Logging;
 using Steamoff.Core.Enums;
 using Steamoff.Core.Models;
 using Application = System.Windows.Application;
@@ -107,7 +108,7 @@ public sealed class TestOutcomeToBrushConverter : IValueConverter
 public sealed class LogLineContainsConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object parameter, CultureInfo culture) =>
-        value is string line && parameter is string needle && line.Contains(needle, StringComparison.Ordinal);
+        value is string line && parameter is string needle && LogLineDisplay.MatchesTag(line, needle);
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();

@@ -98,6 +98,14 @@ public sealed class ScriptFileFirewallService : IFirewallService
         _log.Info($"ScriptFile firewall: очистка правил завершена. Проверено правил={attemptedRules}; успешно={attemptedRules - failedRules}; с ошибками={failedRules}; cleanupMode={cleanupMode}.");
     }
 
+    public async Task RemoveAllManagedRulesAsync(CancellationToken ct = default)
+    {
+        var scriptPath = await _scriptWriter.EnsureUpToDateAsync(ct).ConfigureAwait(false);
+        _log.Info("ScriptFile firewall: removing all Steamoff-managed rules.");
+        await RunCheckedAsync(scriptPath, BuildOperationEnvironment("RemoveAll"), ct).ConfigureAwait(false);
+        _log.Info("ScriptFile firewall: all Steamoff-managed rules removed.");
+    }
+
     private Task UpsertAsync(string scriptPath, FirewallTarget target, RuleDirection direction, CancellationToken ct)
     {
         var name = FirewallRuleNameBuilder.Build(target.DisplayName, direction);

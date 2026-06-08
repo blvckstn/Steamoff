@@ -4,9 +4,7 @@ obj/
 out/
 publish/
 
-## build-release.ps1 output (binaries + manifest, regenerated on every run —
-## see contracts/release-build-flow.md; release\ always holds the latest build
-## locally but is not meant to be version-controlled, like bin/obj/publish above)
+## Release output
 src/Steamoff.App/release/
 *.user
 *.suo
@@ -25,15 +23,12 @@ Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-## AutoClaude local cache (not part of project source)
-.autoclaude/cache/
-.autoclaude/logs/
-
-## Agent tooling/config dirs — local environment setup, not project source
-.autoclaude/
-.claude/
+## Local tool/cache directories
 .specify/
 
-## Settings/logs that may be produced at runtime if run from repo
+## Runtime files if the app is run from the repository
 /settings.json
 /logs/
+
+## Local installer downloads
+dotnet-sdk-*.exe

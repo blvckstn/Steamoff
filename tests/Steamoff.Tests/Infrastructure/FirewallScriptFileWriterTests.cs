@@ -41,7 +41,7 @@ public sealed class FirewallScriptFileWriterTests : IDisposable
         Assert.True(File.Exists(path));
         var content = await File.ReadAllTextAsync(path);
         Assert.Equal(FirewallScriptFileWriter.ScriptContent, content);
-        Assert.Contains("Set-ExecutionPolicy", content, StringComparison.Ordinal);
+        Assert.Contains("Set-ExecutionPolicy -Scope Process Bypass", content, StringComparison.Ordinal);
         Assert.Contains("STEAMOFF_OPERATION", content, StringComparison.Ordinal);
     }
 

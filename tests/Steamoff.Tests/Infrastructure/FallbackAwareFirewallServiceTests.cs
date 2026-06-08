@@ -11,27 +11,27 @@ namespace Steamoff.Tests.Infrastructure;
 public sealed class FallbackAwareFirewallServiceTests
 {
     [Fact]
-    public async Task ApplyBlockAsync_PrimaryThrows_InvokesSecondaryAndLogsFallback()
+    public async Task ApplyBlockAsync_ScriptFileThrows_InvokesSecondaryAndLogsFallback()
     {
         var target = Target("steam");
-        var primary = ScriptedFirewallService.Throwing(new InvalidOperationException("COM failed"));
+        var primary = ScriptedFirewallService.SilentlyNoOps();
         var secondary = ScriptedFirewallService.Succeeding(StateWithActiveRule(target, RuleDirection.Outbound));
-        var scriptFile = ScriptedFirewallService.SilentlyNoOps();
+        var scriptFile = ScriptedFirewallService.Throwing(new InvalidOperationException("script file failed"));
         var localizedLog = new FakeLocalizedLogService();
         var service = CreateService(primary, secondary, scriptFile, localizedLog: localizedLog);
 
         await service.ApplyBlockAsync(new[] { target }, DirectionMode.OutboundOnly);
 
-        Assert.Single(primary.ApplyBlockCalls);
+        Assert.Empty(primary.ApplyBlockCalls);
         Assert.Single(secondary.ApplyBlockCalls);
-        Assert.Empty(scriptFile.ApplyBlockCalls);
+        Assert.Single(scriptFile.ApplyBlockCalls);
         Assert.Equal(DirectionMode.OutboundOnly, secondary.ApplyBlockCalls[0].DirectionMode);
         Assert.Equal(1, localizedLog.CountOf(LogEventKey.FirewallStrategyFallbackUsed));
         Assert.False(localizedLog.Contains(LogEventKey.FirewallAllStrategiesFailed));
     }
 
     [Fact]
-    public async Task ApplyBlockAsync_PrimaryProducesNoRules_InvokesSecondary()
+    public async Task ApplyBlockAsync_ScriptFileProducesNoRules_InvokesSecondary()
     {
         var target = Target("steam");
         var primary = ScriptedFirewallService.SilentlyNoOps();
@@ -41,45 +41,46 @@ public sealed class FallbackAwareFirewallServiceTests
 
         await service.ApplyBlockAsync(new[] { target }, DirectionMode.OutboundOnly);
 
-        Assert.Single(primary.ApplyBlockCalls);
+        Assert.Empty(primary.ApplyBlockCalls);
         Assert.Single(secondary.ApplyBlockCalls);
         // Verification retries up to 3 times (with short delays) before concluding
         // NoRulesProduced, to tolerate read-after-write propagation lag in the
         // firewall rule store — a silent no-op still exhausts every attempt.
-        Assert.Equal(3, primary.GetCurrentStateCallCount);
+        Assert.Equal(3, scriptFile.GetCurrentStateCallCount);
     }
 
     [Fact]
-    public async Task ApplyBlockAsync_PrimaryCreatesExpectedRule_DoesNotInvokeSecondary()
+    public async Task ApplyBlockAsync_ScriptFileCreatesExpectedRule_DoesNotInvokeOtherStrategies()
     {
         var target = Target("steam");
-        var primary = ScriptedFirewallService.Succeeding(StateWithActiveRule(target, RuleDirection.Outbound));
+        var primary = ScriptedFirewallService.SilentlyNoOps();
         var secondary = ScriptedFirewallService.SilentlyNoOps();
-        var scriptFile = ScriptedFirewallService.SilentlyNoOps();
+        var scriptFile = ScriptedFirewallService.Succeeding(StateWithActiveRule(target, RuleDirection.Outbound));
         var localizedLog = new FakeLocalizedLogService();
         var service = CreateService(primary, secondary, scriptFile, localizedLog: localizedLog);
 
         await service.ApplyBlockAsync(new[] { target }, DirectionMode.OutboundOnly);
 
-        Assert.Single(primary.ApplyBlockCalls);
+        Assert.Empty(primary.ApplyBlockCalls);
         Assert.Empty(secondary.ApplyBlockCalls);
-        Assert.Empty(scriptFile.ApplyBlockCalls);
+        Assert.Single(scriptFile.ApplyBlockCalls);
         Assert.False(localizedLog.Contains(LogEventKey.FirewallStrategyFallbackUsed));
     }
 
     [Fact]
-    public async Task RemoveOrDisableAsync_PrimaryThrows_InvokesSecondary()
+    public async Task RemoveOrDisableAsync_ScriptFileThrows_InvokesSecondary()
     {
         var target = Target("steam");
-        var primary = ScriptedFirewallService.Throwing(new InvalidOperationException("COM failed"));
+        var primary = ScriptedFirewallService.SilentlyNoOps();
         var secondary = ScriptedFirewallService.Succeeding(ActualFirewallState.Empty);
-        var scriptFile = ScriptedFirewallService.SilentlyNoOps();
+        var scriptFile = ScriptedFirewallService.Throwing(new InvalidOperationException("script file failed"));
         var service = CreateService(primary, secondary, scriptFile);
 
         await service.RemoveOrDisableAsync(new[] { target }, RuleCleanupMode.DisableRules);
 
-        Assert.Single(primary.RemoveOrDisableCalls);
+        Assert.Empty(primary.RemoveOrDisableCalls);
         Assert.Single(secondary.RemoveOrDisableCalls);
+        Assert.Single(scriptFile.RemoveOrDisableCalls);
         Assert.Equal(RuleCleanupMode.DisableRules, secondary.RemoveOrDisableCalls[0].CleanupMode);
     }
 
@@ -134,9 +135,9 @@ public sealed class FallbackAwareFirewallServiceTests
     public async Task ApplyBlockAsync_AutoMode_NoRememberedStrategy_TriesCanonicalOrder()
     {
         var target = Target("steam");
-        var primary = ScriptedFirewallService.Throwing(new InvalidOperationException("COM failed"));
+        var primary = ScriptedFirewallService.Succeeding(StateWithActiveRule(target, RuleDirection.Outbound));
         var secondary = ScriptedFirewallService.SilentlyNoOps();
-        var scriptFile = ScriptedFirewallService.Succeeding(StateWithActiveRule(target, RuleDirection.Outbound));
+        var scriptFile = ScriptedFirewallService.Throwing(new InvalidOperationException("script failed"));
         var localizedLog = new FakeLocalizedLogService();
         var rememberedCalls = new List<FirewallStrategyVariant?>();
         var service = CreateService(primary, secondary, scriptFile, localizedLog: localizedLog, rememberedCalls: rememberedCalls);
@@ -147,7 +148,7 @@ public sealed class FallbackAwareFirewallServiceTests
         Assert.Single(secondary.ApplyBlockCalls);
         Assert.Single(scriptFile.ApplyBlockCalls);
         Assert.Equal(1, localizedLog.CountOf(LogEventKey.FirewallStrategyFallbackUsed));
-        Assert.Equal(FirewallStrategyVariant.ScriptFile, Assert.Single(rememberedCalls));
+        Assert.Equal(FirewallStrategyVariant.Primary, Assert.Single(rememberedCalls));
     }
 
     [Fact]
@@ -171,6 +172,24 @@ public sealed class FallbackAwareFirewallServiceTests
     }
 
     [Fact]
+    public async Task ApplyBlockAsync_AutoMode_RememberedPrimary_StillTriesScriptFileFirst()
+    {
+        var target = Target("steam");
+        var primary = ScriptedFirewallService.Succeeding(StateWithActiveRule(target, RuleDirection.Outbound));
+        var secondary = ScriptedFirewallService.SilentlyNoOps();
+        var scriptFile = ScriptedFirewallService.Succeeding(StateWithActiveRule(target, RuleDirection.Outbound));
+        var rememberedCalls = new List<FirewallStrategyVariant?>();
+        var service = CreateService(primary, secondary, scriptFile, remembered: FirewallStrategyVariant.Primary, rememberedCalls: rememberedCalls);
+
+        await service.ApplyBlockAsync(new[] { target }, DirectionMode.OutboundOnly);
+
+        Assert.Single(scriptFile.ApplyBlockCalls);
+        Assert.Empty(primary.ApplyBlockCalls);
+        Assert.Empty(secondary.ApplyBlockCalls);
+        Assert.Equal(FirewallStrategyVariant.ScriptFile, Assert.Single(rememberedCalls));
+    }
+
+    [Fact]
     public async Task ApplyBlockAsync_AutoMode_RememberedStrategyFailsThisTime_FallsThroughAndUpdatesMemory()
     {
         var target = Target("steam");
@@ -186,7 +205,7 @@ public sealed class FallbackAwareFirewallServiceTests
         // Try-order was [ScriptFile, Primary, Secondary] — ScriptFile failed, Primary won.
         Assert.Single(scriptFile.ApplyBlockCalls);
         Assert.Single(primary.ApplyBlockCalls);
-        Assert.Empty(secondary.ApplyBlockCalls);
+        Assert.Single(secondary.ApplyBlockCalls);
         Assert.Equal(1, localizedLog.CountOf(LogEventKey.FirewallStrategyFallbackUsed));
         Assert.Equal(FirewallStrategyVariant.Primary, Assert.Single(rememberedCalls));
     }
@@ -281,9 +300,9 @@ public sealed class FallbackAwareFirewallServiceTests
         var target = Target("steam");
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var currentMode = FirewallStrategyMode.Auto;
-        var primary = ScriptedFirewallService.SucceedingAfter(gate.Task, StateWithActiveRule(target, RuleDirection.Outbound));
+        var primary = ScriptedFirewallService.SilentlyNoOps();
         var secondary = ScriptedFirewallService.SilentlyNoOps();
-        var scriptFile = ScriptedFirewallService.SilentlyNoOps();
+        var scriptFile = ScriptedFirewallService.SucceedingAfter(gate.Task, StateWithActiveRule(target, RuleDirection.Outbound));
         var rememberedCalls = new List<FirewallStrategyVariant?>();
         var service = new FallbackAwareFirewallService(
             primary, secondary, scriptFile,
@@ -301,10 +320,10 @@ public sealed class FallbackAwareFirewallServiceTests
         gate.SetResult();
         await operation;
 
-        Assert.Single(primary.ApplyBlockCalls);
+        Assert.Empty(primary.ApplyBlockCalls);
         Assert.Empty(secondary.ApplyBlockCalls);
-        Assert.Empty(scriptFile.ApplyBlockCalls);
-        Assert.Equal(FirewallStrategyVariant.Primary, Assert.Single(rememberedCalls));
+        Assert.Single(scriptFile.ApplyBlockCalls);
+        Assert.Equal(FirewallStrategyVariant.ScriptFile, Assert.Single(rememberedCalls));
     }
 
     private static FallbackAwareFirewallService CreateService(

@@ -90,7 +90,7 @@ public sealed class FileLogService : ILogService
 
     private void Write(string level, string message)
     {
-        var line = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz} [{level}] {message}";
+        var line = $"{DateTimeOffset.Now:dd.MM.yy HH:mm:ss} {message}";
 
         lock (_gate)
         {

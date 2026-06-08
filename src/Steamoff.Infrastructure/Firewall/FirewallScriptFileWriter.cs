@@ -32,7 +32,7 @@ public sealed class FirewallScriptFileWriter : IFirewallScriptFileWriter
 # discarded automatically when the process exits, never persisted to the
 # registry/machine/user scopes (research.md R1).
 try {
-    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force | Out-Null
+    Set-ExecutionPolicy -Scope Process Bypass -Force | Out-Null
 } catch {
     # Ignored — a MachinePolicy/UserPolicy GPO can't be overridden from Process
     # scope anyway; the "-File ... -ExecutionPolicy Bypass" launch flag remains
@@ -72,6 +72,10 @@ switch ($Operation) {
                 Where-Object { $_.DisplayName -eq $DisplayName } |
                 Set-NetFirewallRule -Enabled False -ErrorAction Stop
         }
+    }
+    'RemoveAll' {
+        Get-NetFirewallRule -Group $Group -ErrorAction SilentlyContinue |
+            Remove-NetFirewallRule -ErrorAction Stop
     }
     'Query' {
         $rules = @(Get-NetFirewallRule -Group $Group -ErrorAction SilentlyContinue)
