@@ -37,8 +37,9 @@ Steamoff takes the more boring and more reliable route: Microsoft Defender Firew
 
 No Steam patching. No DRM tricks. No game-file edits. No router changes. Just local Windows firewall rules with a friendly button on top.
 
-Steamoff is not trying to replace Steam or be a do-everything tool. It solves one specific moment: you want Steam off the network *right now*, on your terms, without losing the rest of your internet connection or guessing whether the client actually listened to you. Click it on, do whatever you needed quiet for, click it off — done.
+<b>Steamoff is not trying to replace Steam or be a do-everything tool. It solves one specific moment: you want Steam off the network *right now*, on your terms, without losing the rest of your internet connection or guessing whether the client actually listened to you. Click it on, do whatever you needed quiet for, click it off — done.</b>
 
+<img width="451" height="862" alt="Image" src="https://github.com/user-attachments/assets/3da91ca5-a0f0-4ccc-ab8a-e675545e00e7" />
 ---
 
 ## How Steamoff Works
