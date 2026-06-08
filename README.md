@@ -11,7 +11,7 @@ Not "appear offline". Not "maybe Steam will start in Offline Mode today". A clea
 
 It is made for players, modders, testers, and PC people who want the useful part of Steam Offline Mode without fighting Steam's mood, login cache, pending updates, or a half-broken hotel Wi-Fi connection.
 
-> Русская версия ниже / below
+> **[Русская версия](#steamoff-ru)** ниже / below
 
 ---
 
@@ -35,22 +35,7 @@ Steamoff takes the more boring and more reliable route: Microsoft Defender Firew
 
 No Steam patching. No DRM tricks. No game-file edits. No router changes. Just local Windows firewall rules with a friendly button on top.
 
----
-
-## Why It Feels Different
-
-Steamoff is not trying to replace Steam. It is a small switch for moments when Steam's own Offline Mode is too vague.
-
-Examples:
-
-- you want to play a game now and decide about updates later;
-- you are on mobile/hotel internet and do not want Steam burning traffic in the background;
-- you need Steam offline while the rest of the PC stays online;
-- you are testing a modded game, launcher, benchmark, or tool without network access;
-- you have a folder full of `.exe` builds and want all of them isolated at once;
-- you want repeatable firewall rules instead of clicking through Windows Defender every time.
-
-This is the kind of utility that lives in the tray and quietly does one job.
+Steamoff is not trying to replace Steam or be a do-everything tool. It solves one specific moment: you want Steam off the network *right now*, on your terms, without losing the rest of your internet connection or guessing whether the client actually listened to you. Click it on, do whatever you needed quiet for, click it off — done.
 
 ---
 
@@ -103,17 +88,17 @@ That policy change is only for the current PowerShell process. It does not perma
 
 You sit down to play, Steam decides the game needs an update, and your evening turns into a progress bar. With Steamoff you can keep Steam offline, launch what already exists locally, and update later when you actually want to.
 
-**Bad network, calm Steam**
+**You're on a slow or metered connection**
 
-Train Wi-Fi, hotel Wi-Fi, mobile hotspot, flaky router. Windows can stay online for chat, browser, and downloads, while Steam is cut off until the connection is worth trusting.
+Train Wi-Fi, a hotel network, a mobile hotspot with a data cap — Steam doesn't know or care, and it will happily try to sync, update, and phone home in the background anyway. Turn Steam off, keep your browser, Discord, and downloads working normally, and turn Steam back on once you're somewhere with real bandwidth.
 
-**Modding and test builds**
+**You're testing something and don't want it touching the internet**
 
-You are checking a modded setup or a small tool and want to know what it does without the internet. Add the `.exe` or the whole folder, switch offline mode on, test, switch it back off.
+A modded build, a cracked or pirated launcher you don't fully trust, a benchmark, a tool you downloaded from somewhere sketchy — point Steamoff at the `.exe` (or the whole folder), flip the switch, run it offline, see what it actually does, then turn the rule off when you're done.
 
-**One app offline, everything else online**
+**You need one specific program offline — not your whole PC**
 
-Sometimes the answer is not "disconnect the PC". It is "this exact program should not talk to the network right now."
+Unplugging the router or turning on Airplane Mode is overkill when the actual problem is "this one app keeps connecting and I don't want it to right now." Steamoff lets you target exactly that program (Steam, a game, a launcher, anything with an `.exe`) while everything else on the machine keeps working normally.
 
 ---
 
@@ -194,7 +179,7 @@ Add the app's `.exe` or its folder in settings. The same offline switch can incl
 
 ---
 
-# Steamoff ^{RU}
+# Steamoff <sup>RU</sup>
 
 Steamoff — маленькая Windows-утилита, которая даёт Steam настоящий сетевой выключатель.
 
@@ -224,22 +209,7 @@ Steamoff работает ниже — на уровне Microsoft Defender Fire
 
 Никаких правок Steam. Никаких обходов DRM. Никаких изменений файлов игр. Никаких танцев с роутером. Только локальные правила Windows Firewall и нормальная кнопка сверху.
 
----
-
-## Почему это удобно
-
-Steamoff не пытается заменить Steam. Он закрывает один конкретный сценарий: когда Steam должен быть офлайн, а компьютер — нет.
-
-Живые примеры:
-
-- хочется поиграть сейчас, а обновления оставить на потом;
-- интернет мобильный, гостиничный или просто нестабильный;
-- надо оставить браузер, Discord и всё остальное онлайн, но Steam изолировать;
-- нужно проверить мод, launcher, benchmark или тестовый билд без сети;
-- есть папка с `.exe`, и все эти приложения надо временно закрыть от интернета;
-- не хочется каждый раз вручную копаться в Windows Defender Firewall.
-
-Это не комбайн. Это аккуратный переключатель, который живёт в трее и делает одну вещь.
+Steamoff не пытается заменить Steam и не лезет в остальные ваши дела. Он решает один конкретный момент: вам нужно, чтобы Steam прямо сейчас замолчал в сети — без потери остального интернета и без гадания, послушался клиент или нет. Включили, сделали то, ради чего хотели тишины, выключили — и всё.
 
 ---
 
@@ -292,17 +262,17 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 
 Вы садитесь играть, а Steam внезапно решает обновиться. Steamoff позволяет заранее закрыть Steam интернет, запустить то, что уже есть локально, а обновления оставить на потом.
 
-**Плохой интернет, спокойный Steam**
+**Медленный или лимитированный интернет**
 
-Поезд, гостиница, мобильный хотспот, странный роутер. Windows остаётся онлайн, а Steam не трогает сеть до тех пор, пока вы сами его не вернёте.
+Поезд, гостиница, мобильный хотспот с пакетом трафика — Steam об этом не знает и не думает, и спокойно качает обновления и стучится в сеть в фоне. Выключаете Steam — браузер, Discord и загрузки работают как обычно, а Steam включаете обратно, когда окажетесь там, где интернет нормальный.
 
-**Моды, лаунчеры и тестовые билды**
+**Хотите проверить что-то, не пуская это в сеть**
 
-Добавьте `.exe` или папку, включите автономный режим, проверьте поведение без сети, выключите обратно. Удобно для моддинга, QA, экспериментов и просто аккуратного контроля.
+Модифицированная сборка, лаунчер сомнительного происхождения, бенчмарк, программа из непонятного источника — указываете на `.exe` (или сразу на папку), включаете блокировку, смотрите, что оно делает без интернета, потом выключаете правило, когда всё проверили.
 
-**Не весь ПК офлайн, а конкретная программа**
+**Нужно заблокировать одну конкретную программу, а не весь ПК**
 
-Иногда не надо отключать интернет целиком. Надо, чтобы одна конкретная программа сейчас не выходила в сеть.
+Выдёргивать роутер или включать авиарежим — перебор, если на самом деле проблема в одной программе, которая лезет в сеть, когда не надо. Steamoff нацеливается именно на неё (Steam, игру, лаунчер, любой `.exe`), а всё остальное на компьютере продолжает работать как обычно.
 
 ---
 
