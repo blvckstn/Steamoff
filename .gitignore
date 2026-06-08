@@ -1,0 +1,34 @@
+## .NET / Visual Studio
+bin/
+obj/
+out/
+publish/
+
+## Release output
+src/Steamoff.App/release/
+*.user
+*.suo
+.vs/
+
+## Test results
+TestResults/
+*.trx
+
+## Rider / VS Code
+.idea/
+.vscode/
+
+## OS
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+## Local tool/cache directories
+.specify/
+
+## Runtime files if the app is run from the repository
+/settings.json
+/logs/
+
+## Local installer downloads
+dotnet-sdk-*.exe

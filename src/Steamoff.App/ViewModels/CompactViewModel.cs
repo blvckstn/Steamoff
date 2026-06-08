@@ -1,0 +1,573 @@
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Reflection;
+using System.Windows.Input;
+using System.Windows.Threading;
+using Steamoff.App.Localization;
+using Steamoff.App.Logging;
+using Steamoff.App.Status;
+using Steamoff.Core.Enums;
+using Steamoff.Core.Localization;
+using Steamoff.Core.Logging;
+using Steamoff.Core.Models;
+using Steamoff.Core.Mvvm;
+using Clipboard = System.Windows.Clipboard;
+
+namespace Steamoff.App.ViewModels;
+
+/// <summary>
+/// Drives the Compact Steam Switch View — the small always-available main
+/// screen: one big Block/Unblock button, an honest status readout (read back
+/// from the firewall, not cached), the active enforcement mode, an admin/
+/// firewall-access indicator, and the door into Settings.
+/// </summary>
+public sealed class CompactViewModel : ObservableObject, IDisposable
+{
+    private const int MiniLogLineCount = 30;
+
+    private readonly AppServices _services;
+    private readonly DispatcherTimer _refreshTimer;
+    private readonly DispatcherTimer _logRefreshTimer;
+    private readonly DispatcherTimer _iconCycleTimer;
+
+    private AppSettings _settings;
+    private HealthStatus _status = HealthStatus.Unknown;
+    private UserContextInfo _userContext;
+    private bool _isBusy;
+    private bool _isCheckingStatus;
+    private bool _isLogExpanded;
+    private bool _hasCompletedInitialStatusCheck;
+    private bool _hasAppliedModeThisSession;
+    private int _activeExpectedRuleCount;
+    private int _expectedRuleCount;
+    private int _iconCycleIndex;
+    private RobotStatusKind _statusIconKind = RobotStatusKind.Waiting;
+
+    public CompactViewModel(AppServices services, AppSettings settings, UserContextInfo userContext)
+    {
+        _services = services;
+        _settings = settings;
+        _userContext = userContext;
+        Loc = new LocalizationProxy(services.Localization);
+
+        ToggleCommand = new AsyncRelayCommand(
+            () => SetOfflineModeAsync(_settings.DesiredState == DesiredState.Blocked ? DesiredState.Unblocked : DesiredState.Blocked),
+            () => !IsBusy && _userContext.HasFirewallAccess);
+        EnableOfflineCommand = new AsyncRelayCommand(() => SetOfflineModeAsync(DesiredState.Blocked), () => !IsBusy && _userContext.HasFirewallAccess);
+        DisableOfflineCommand = new AsyncRelayCommand(() => SetOfflineModeAsync(DesiredState.Unblocked), () => !IsBusy && _userContext.HasFirewallAccess);
+        OpenSettingsCommand = new RelayCommand(() => SettingsRequested?.Invoke());
+        ExpandLogCommand = new RelayCommand(() => IsLogExpanded = !IsLogExpanded);
+        OpenFullLogCommand = new RelayCommand(OpenFullLog);
+        CopyDiagnosticsCommand = new AsyncRelayCommand(CopyDiagnosticsAsync);
+
+        _services.Localization.LanguageChanged += OnLanguageChanged;
+
+        _refreshTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(Math.Max(10, settings.CheckIntervalSeconds))
+        };
+        _refreshTimer.Tick += async (_, _) => await RefreshStatusAsync().ConfigureAwait(true);
+
+        _logRefreshTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(5)
+        };
+        _logRefreshTimer.Tick += async (_, _) => await RefreshRecentLogLinesAsync().ConfigureAwait(true);
+        _logRefreshTimer.Start();
+
+        _iconCycleTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
+        _iconCycleTimer.Tick += (_, _) => CycleStatusIcon();
+
+        _ = RefreshRecentLogLinesAsync();
+    }
+
+    public event Action? SettingsRequested;
+
+    public LocalizationProxy Loc { get; }
+
+    public ICommand ToggleCommand { get; }
+    public ICommand EnableOfflineCommand { get; }
+    public ICommand DisableOfflineCommand { get; }
+    public ICommand OpenSettingsCommand { get; }
+    public ICommand ExpandLogCommand { get; }
+    public ICommand OpenFullLogCommand { get; }
+    public ICommand CopyDiagnosticsCommand { get; }
+
+    public ObservableCollection<string> RecentLogLines { get; } = new();
+
+    public RobotStatusKind StatusIconKind
+    {
+        get => _statusIconKind;
+        private set => SetProperty(ref _statusIconKind, value);
+    }
+
+    public bool IsLogExpanded
+    {
+        get => _isLogExpanded;
+        set
+        {
+            if (SetProperty(ref _isLogExpanded, value))
+            {
+                OnPropertyChanged(nameof(ExpandLogButtonText));
+            }
+        }
+    }
+
+    public string ExpandLogButtonText => IsLogExpanded ? Loc["compact.miniLog.collapse"] : Loc["compact.miniLog.expand"];
+
+    public bool HasRecentLogLines => RecentLogLines.Count > 0;
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        private set
+        {
+            if (SetProperty(ref _isBusy, value))
+            {
+                ((AsyncRelayCommand)ToggleCommand).RaiseCanExecuteChanged();
+                ((AsyncRelayCommand)EnableOfflineCommand).RaiseCanExecuteChanged();
+                ((AsyncRelayCommand)DisableOfflineCommand).RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(ToggleButtonText));
+                OnPropertyChanged(nameof(OfflineOnButtonText));
+                OnPropertyChanged(nameof(OfflineOffButtonText));
+                OnPropertyChanged(nameof(IsActivityVisible));
+                OnPropertyChanged(nameof(ActivityText));
+            }
+        }
+    }
+
+    public bool IsCheckingStatus
+    {
+        get => _isCheckingStatus;
+        private set
+        {
+            if (SetProperty(ref _isCheckingStatus, value))
+            {
+                OnPropertyChanged(nameof(IsActivityVisible));
+                OnPropertyChanged(nameof(ActivityText));
+                OnPropertyChanged(nameof(CoverageDetailText));
+            }
+        }
+    }
+
+    public bool IsActivityVisible => IsBusy || IsCheckingStatus;
+
+    public string ActivityText => IsBusy ? "Выполняется операция..." : "Проверка состояния...";
+
+    public HealthStatus Status
+    {
+        get => _status;
+        private set
+        {
+            if (SetProperty(ref _status, value))
+            {
+                OnPropertyChanged(nameof(StatusText));
+                OnPropertyChanged(nameof(IsBlocked));
+                OnPropertyChanged(nameof(ToggleButtonText));
+                OnPropertyChanged(nameof(CoverageText));
+                OnPropertyChanged(nameof(CoverageDetailText));
+            }
+        }
+    }
+
+    public bool IsBlocked => _settings.DesiredState == DesiredState.Blocked;
+
+    /// <summary>True when the persisted language differs from the running process's language — mirrors <see cref="ViewModels.SettingsViewModel.IsRestartRequired"/> (no <see cref="Core.Models.SettingsEditSession"/> here, so it's derived straight from <see cref="AppServices"/>).</summary>
+    public bool IsRestartRequired => LanguageRestartState.IsRestartRequired(_settings.Language, _services.Localization.CurrentLanguage.Code);
+
+    public string StatusText => _status.Overall switch
+    {
+        OverallStatus.FullyBlocked => Loc["compact.statusBlocked"],
+        OverallStatus.FullyUnblocked => Loc["compact.statusUnblocked"],
+        OverallStatus.PartiallyBlocked => Loc["compact.statusPartial"],
+        OverallStatus.DriftDetected => Loc["compact.statusDrift"],
+        OverallStatus.Error => Loc["compact.statusError"],
+        OverallStatus.NotConfigured => Loc["compact.statusNotConfigured"],
+        OverallStatus.ReadOnlyNoAdmin => Loc["status.readOnly"],
+        _ => Loc["compact.statusChecking"]
+    };
+
+    public string CoverageText => _status.Overall is OverallStatus.NotConfigured or OverallStatus.Error
+        ? string.Empty
+        : $"{_status.CoveragePercent:0}%";
+
+    public string CoverageDetailText
+    {
+        get
+        {
+            if (_expectedRuleCount <= 0)
+            {
+                return IsCheckingStatus ? "Проверяю правила..." : string.Empty;
+            }
+
+            return _settings.DesiredState == DesiredState.Blocked
+                ? $"Активных правил: {_activeExpectedRuleCount} из {_expectedRuleCount}"
+                : $"Оставшихся активных правил: {_activeExpectedRuleCount} из {_expectedRuleCount}";
+        }
+    }
+
+    public string ToggleButtonText => IsBusy
+        ? Loc["compact.statusChecking"]
+        : (IsBlocked ? Loc["compact.unblockButton"] : Loc["compact.blockButton"]);
+
+    public string OfflineModeTitle => Loc["compact.offlineModeTitle"];
+
+    public string OfflineOnButtonText => Loc["compact.offlineOnButton"];
+
+    public string OfflineOffButtonText => Loc["compact.offlineOffButton"];
+
+    public string ModeText => Loc.GetFormatted("compact.modeLabel", ModeDisplayName(_settings.EnforcementMode));
+
+    public string AdminStatusText => _userContext.HasFirewallAccess ? Loc["compact.adminOk"] : Loc["compact.adminMissing"];
+
+    public bool HasAdminAccess => _userContext.HasFirewallAccess;
+
+    public string VersionText => Loc.GetFormatted("compact.versionLabel", AppVersion);
+
+    public HealthLevel Level => _userContext.HasFirewallAccess ? _status.Level : HealthLevel.ReadOnly;
+
+    private static string AppVersion =>
+        Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0";
+
+    private static string ModeDisplayName(EnforcementMode mode) => mode switch
+    {
+        EnforcementMode.AlwaysBlock => "Always Block",
+        EnforcementMode.AlwaysUnblock => "Always Unblock",
+        EnforcementMode.PauseMonitoring => "Pause Monitoring",
+        _ => "Manual Toggle"
+    };
+
+    private void OnLanguageChanged(object? sender, AppLanguage language) => RaiseLanguageDependentChanges();
+
+    public void RaiseLanguageDependentChanges()
+    {
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(ToggleButtonText));
+        OnPropertyChanged(nameof(OfflineModeTitle));
+        OnPropertyChanged(nameof(OfflineOnButtonText));
+        OnPropertyChanged(nameof(OfflineOffButtonText));
+        OnPropertyChanged(nameof(ModeText));
+        OnPropertyChanged(nameof(AdminStatusText));
+        OnPropertyChanged(nameof(VersionText));
+        OnPropertyChanged(nameof(ExpandLogButtonText));
+        OnPropertyChanged(nameof(IsRestartRequired));
+        OnPropertyChanged(nameof(ActivityText));
+        OnPropertyChanged(nameof(CoverageDetailText));
+    }
+
+    public async Task RefreshRecentLogLinesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var lines = await _services.Log.ReadLastLinesAsync(MiniLogLineCount, ct).ConfigureAwait(true);
+
+            RecentLogLines.Clear();
+            foreach (var line in lines)
+            {
+                RecentLogLines.Add(LogLineDisplay.ToDisplayText(line));
+            }
+
+            OnPropertyChanged(nameof(HasRecentLogLines));
+        }
+        catch (IOException)
+        {
+            // The log file may be momentarily locked by a concurrent write — skip this refresh tick.
+        }
+    }
+
+    private void OpenFullLog()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(_services.Log.LogFilePath) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
+        {
+            _services.Log.Error("Не удалось открыть файл лога.", ex);
+        }
+    }
+
+    private async Task CopyDiagnosticsAsync()
+    {
+        var report = await _services.Diagnostics.BuildExtendedReportAsync().ConfigureAwait(true);
+        Clipboard.SetText(report);
+        _services.Notifications.Show(Loc["compact.miniLog.title"], Loc["compact.miniLog.copied"]);
+        await _services.LocalizedLog.LogAsync(LogEventKey.DiagnosticsCopied).ConfigureAwait(true);
+    }
+
+    public void UpdateSettings(AppSettings settings)
+    {
+        _settings = settings;
+        _refreshTimer.Interval = TimeSpan.FromSeconds(Math.Max(10, settings.CheckIntervalSeconds));
+        OnPropertyChanged(nameof(IsBlocked));
+        OnPropertyChanged(nameof(ModeText));
+        OnPropertyChanged(nameof(ToggleButtonText));
+        OnPropertyChanged(nameof(IsRestartRequired));
+        OnPropertyChanged(nameof(CoverageDetailText));
+    }
+
+    public void UpdateUserContext(UserContextInfo userContext)
+    {
+        _userContext = userContext;
+        ((AsyncRelayCommand)ToggleCommand).RaiseCanExecuteChanged();
+        ((AsyncRelayCommand)EnableOfflineCommand).RaiseCanExecuteChanged();
+        ((AsyncRelayCommand)DisableOfflineCommand).RaiseCanExecuteChanged();
+        OnPropertyChanged(nameof(AdminStatusText));
+        OnPropertyChanged(nameof(HasAdminAccess));
+        OnPropertyChanged(nameof(Level));
+    }
+
+    public async Task RefreshStatusAsync(CancellationToken ct = default)
+    {
+        if (IsCheckingStatus)
+        {
+            return;
+        }
+
+        IsCheckingStatus = true;
+        try
+        {
+            _services.Log.Info("Status check started.");
+            var targets = await TargetBuilder.BuildAllTargetsAsync(_services, _settings, ct).ConfigureAwait(true);
+            var desired = new DesiredFirewallState
+            {
+                State = _settings.DesiredState,
+                Targets = targets,
+                DirectionMode = _settings.DirectionMode
+            };
+
+            var actual = _userContext.HasFirewallAccess
+                ? await _services.Firewall.GetCurrentStateAsync(ct).ConfigureAwait(true)
+                : ActualFirewallState.Empty;
+
+            var wasDrifting = _status.Overall == OverallStatus.DriftDetected;
+            (_activeExpectedRuleCount, _expectedRuleCount) = CountExpectedActiveRules(targets, actual.Rules, _settings.DirectionMode);
+            Status = _services.StatusEvaluator.Evaluate(desired, actual, _userContext, _settings.AdditionalFolders, _settings.AdditionalExecutables);
+            OnPropertyChanged(nameof(CoverageDetailText));
+            _services.Tray.UpdateStatus(Status, !_userContext.HasFirewallAccess);
+            if (!IsBusy && _hasAppliedModeThisSession)
+            {
+                StatusIconKind = ToRobotStatusKind(Status.Overall);
+            }
+
+            _services.Log.Info($"Status: {Status.Overall}, rules {_activeExpectedRuleCount}/{_expectedRuleCount}, targets {targets.Count}.");
+
+            if (Status.Overall == OverallStatus.DriftDetected && !wasDrifting && _hasCompletedInitialStatusCheck)
+            {
+                await _services.LocalizedLog.LogAsync(LogEventKey.DriftDetected).ConfigureAwait(true);
+            }
+
+            if (Status.Overall == OverallStatus.DriftDetected && !_hasCompletedInitialStatusCheck)
+            {
+                _services.Log.Info($"Startup status is partial: rules {_activeExpectedRuleCount}/{_expectedRuleCount}.");
+            }
+
+            _hasCompletedInitialStatusCheck = true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Core.Exceptions.FirewallOperationException)
+        {
+            _services.Log.Error($"Status check failed: {ex.Message}", ex);
+            Status = new HealthStatus
+            {
+                Level = HealthLevel.Error,
+                Overall = OverallStatus.Error,
+                Message = ex.Message
+            };
+        }
+        finally
+        {
+            IsCheckingStatus = false;
+        }
+    }
+
+    private async Task SetOfflineModeAsync(DesiredState requestedState)
+    {
+        StartIconCycle();
+        IsBusy = true;
+        try
+        {
+            var targets = await TargetBuilder.BuildAllTargetsAsync(_services, _settings, default).ConfigureAwait(true);
+            _services.Log.Info($"PowerShell: {(requestedState == DesiredState.Blocked ? "enable" : "disable")} offline, targets {targets.Count}, rules {ExpectedRuleCount(targets, _settings.DirectionMode)}.");
+
+            if (requestedState == DesiredState.Blocked)
+            {
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallBlockStarted).ConfigureAwait(true);
+                await _services.ScriptFileFirewall.ApplyBlockAsync(targets, _settings.DirectionMode).ConfigureAwait(true);
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallBlockCompleted).ConfigureAwait(true);
+                _services.Notifications.Show(Loc["notification.blockedTitle"], Loc["notification.blockedBody"]);
+            }
+            else
+            {
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallUnblockStarted).ConfigureAwait(true);
+                await _services.ScriptFileFirewall.RemoveAllManagedRulesAsync().ConfigureAwait(true);
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallUnblockCompleted).ConfigureAwait(true);
+                _services.Notifications.Show(Loc["notification.unblockedTitle"], Loc["notification.unblockedBody"]);
+            }
+
+            _settings.DesiredState = requestedState;
+            await _services.Settings.SaveAsync(_settings).ConfigureAwait(true);
+            OnPropertyChanged(nameof(IsBlocked));
+            OnPropertyChanged(nameof(ToggleButtonText));
+
+            await RefreshStatusAsync().ConfigureAwait(true);
+            _hasAppliedModeThisSession = true;
+            StatusIconKind = requestedState == DesiredState.Blocked ? RobotStatusKind.Offline : RobotStatusKind.Online;
+            _services.Log.Info($"PowerShell done: {Status.Overall}, rules {_activeExpectedRuleCount}/{_expectedRuleCount}.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Core.Exceptions.FirewallOperationException)
+        {
+            _services.Log.Error($"PowerShell failed: {ex.Message}", ex);
+            await _services.LocalizedLog.LogAsync(
+                requestedState == DesiredState.Blocked ? LogEventKey.FirewallBlockFailed : LogEventKey.FirewallUnblockFailed,
+                ex.Message).ConfigureAwait(true);
+            Status = new HealthStatus
+            {
+                Level = HealthLevel.Error,
+                Overall = OverallStatus.Error,
+                Message = ex.Message
+            };
+        }
+        finally
+        {
+            StopIconCycle();
+            IsBusy = false;
+        }
+    }
+
+    private void StartIconCycle()
+    {
+        _iconCycleIndex = 0;
+        CycleStatusIcon();
+        _iconCycleTimer.Start();
+    }
+
+    private void StopIconCycle()
+    {
+        _iconCycleTimer.Stop();
+    }
+
+    private void CycleStatusIcon()
+    {
+        var cycle = new[] { RobotStatusKind.Online, RobotStatusKind.Offline, RobotStatusKind.Waiting };
+        StatusIconKind = cycle[_iconCycleIndex % cycle.Length];
+        _iconCycleIndex++;
+    }
+
+    private static RobotStatusKind ToRobotStatusKind(OverallStatus status) => status switch
+    {
+        OverallStatus.FullyBlocked => RobotStatusKind.Offline,
+        OverallStatus.FullyUnblocked => RobotStatusKind.Online,
+        _ => RobotStatusKind.Waiting
+    };
+
+    private async Task ToggleAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var targets = await TargetBuilder.BuildAllTargetsAsync(_services, _settings, default).ConfigureAwait(true);
+            var newState = _settings.DesiredState == DesiredState.Blocked ? DesiredState.Unblocked : DesiredState.Blocked;
+            _services.Log.Info(
+                $"Переключение Steam: начало. Было={_settings.DesiredState}; будет={newState}; целей={targets.Count}; directionMode={_settings.DirectionMode}; cleanupMode={_settings.RuleCleanupMode}; ожидаемых правил={ExpectedRuleCount(targets, _settings.DirectionMode)}.");
+
+            if (newState == DesiredState.Blocked)
+            {
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallBlockStarted).ConfigureAwait(true);
+                await _services.Firewall.ApplyBlockAsync(targets, _settings.DirectionMode).ConfigureAwait(true);
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallBlockCompleted).ConfigureAwait(true);
+                _services.Notifications.Show(Loc["notification.blockedTitle"], Loc["notification.blockedBody"]);
+            }
+            else
+            {
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallUnblockStarted).ConfigureAwait(true);
+                await _services.Firewall.RemoveOrDisableAsync(targets, _settings.RuleCleanupMode).ConfigureAwait(true);
+                await _services.LocalizedLog.LogAsync(LogEventKey.FirewallUnblockCompleted).ConfigureAwait(true);
+                _services.Notifications.Show(Loc["notification.unblockedTitle"], Loc["notification.unblockedBody"]);
+            }
+
+            _settings.DesiredState = newState;
+            await _services.Settings.SaveAsync(_settings).ConfigureAwait(true);
+            OnPropertyChanged(nameof(IsBlocked));
+
+            await RefreshStatusAsync().ConfigureAwait(true);
+            _services.Log.Info($"Переключение Steam: завершено. Итог={Status.Overall}; активных ожидаемых правил={_activeExpectedRuleCount}/{_expectedRuleCount}; покрытие={Status.CoveragePercent:0.0}%.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Core.Exceptions.FirewallOperationException)
+        {
+            _services.Log.Error("Не удалось переключить состояние блокировки Steam.", ex);
+            await _services.LocalizedLog.LogAsync(
+                _settings.DesiredState == DesiredState.Blocked ? LogEventKey.FirewallUnblockFailed : LogEventKey.FirewallBlockFailed,
+                ex.Message).ConfigureAwait(true);
+            Status = new HealthStatus
+            {
+                Level = HealthLevel.Error,
+                Overall = OverallStatus.Error,
+                Message = ex.Message
+            };
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private static int ExpectedRuleCount(IReadOnlyList<FirewallTarget> targets, DirectionMode directionMode) =>
+        targets.Count * (directionMode == DirectionMode.OutboundAndInbound ? 2 : 1);
+
+    private static (int Active, int Expected) CountExpectedActiveRules(
+        IReadOnlyList<FirewallTarget> targets,
+        IReadOnlyList<FirewallRuleState> rules,
+        DirectionMode directionMode)
+    {
+        var expected = ExpectedRuleCount(targets, directionMode);
+        var active = 0;
+
+        foreach (var target in targets)
+        {
+            if (HasActiveExpectedRule(target, rules, RuleDirection.Outbound))
+            {
+                active++;
+            }
+
+            if (directionMode == DirectionMode.OutboundAndInbound && HasActiveExpectedRule(target, rules, RuleDirection.Inbound))
+            {
+                active++;
+            }
+        }
+
+        return (active, expected);
+    }
+
+    private static bool HasActiveExpectedRule(FirewallTarget target, IReadOnlyList<FirewallRuleState> rules, RuleDirection direction)
+    {
+        var expectedName = Core.Services.FirewallRuleNameBuilder.Build(target.DisplayName, direction);
+        return rules.Any(rule =>
+            rule.IsManagedBySteamoff &&
+            string.Equals(rule.RuleName, expectedName, StringComparison.Ordinal) &&
+            rule.Direction == direction &&
+            rule.Action == RuleAction.Block &&
+            rule.Enabled &&
+            PathsMatch(rule.ApplicationName, target.ExecutablePath));
+    }
+
+    private static bool PathsMatch(string? rulePath, string targetPath)
+    {
+        if (string.IsNullOrWhiteSpace(rulePath))
+        {
+            return false;
+        }
+
+        return string.Equals(rulePath.Trim().TrimEnd('\\'), targetPath.Trim().TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer.Stop();
+        _logRefreshTimer.Stop();
+        _iconCycleTimer.Stop();
+        _services.Localization.LanguageChanged -= OnLanguageChanged;
+    }
+}
