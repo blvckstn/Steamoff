@@ -9,7 +9,6 @@ namespace Steamoff.App.Services;
 /// <c>Microsoft.Win32.OpenFolderDialog</c>/<c>OpenFileDialog</c> (.NET 8).
 /// Aliased explicitly because <c>System.Windows.Forms</c> — pulled in for
 /// the tray <c>NotifyIcon</c> — declares same-named dialog types that would
-/// otherwise be ambiguous (see IMPLEMENTATION_LOG.md "Baseline build" CS0104).
 /// </summary>
 public sealed class WpfDialogService : IDialogService
 {

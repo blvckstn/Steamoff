@@ -21,7 +21,6 @@ public sealed class FirewallScriptFileWriter : IFirewallScriptFileWriter
 {
     /// <summary>
     /// The script this build expects to find on disk. Adapted from the proven
-    /// steamOff.ps1 New-NetFirewallRule/Get-NetFirewallRule/Remove-NetFirewallRule
     /// mechanics, but driven entirely by STEAMOFF_* environment variables and
     /// FirewallConstants/FirewallRuleNameBuilder-compatible naming/grouping —
     /// never the prototype's "SteamOfflineToggle" naming (FR-002).

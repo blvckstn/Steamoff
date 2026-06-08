@@ -8,7 +8,6 @@ namespace Steamoff.Core.Localization;
 /// resources (Resources/Localization/*.json, embedded under the
 /// "Steamoff.Core.Resources.Localization.{code}.json" logical name) and
 /// caches them per language code. Embedding keeps the published single-file
-/// EXE self-contained — no loose files to lose track of (see ASSUMPTIONS).
 /// </summary>
 public sealed class LocalizedStringProvider
 {

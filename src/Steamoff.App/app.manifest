@@ -10,7 +10,6 @@
           autostart entries — both require administrator privileges. The app
           additionally performs a runtime elevation check (IElevationService)
           and degrades to a read-only mode if, for any reason, it ends up
-          running without the expected privileges (see ASSUMPTIONS.md A10).
         -->
         <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
       </requestedPrivileges>

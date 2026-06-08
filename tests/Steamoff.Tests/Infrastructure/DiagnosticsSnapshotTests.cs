@@ -9,7 +9,6 @@ using Steamoff.Tests.TestSupport;
 namespace Steamoff.Tests.Infrastructure;
 
 /// <summary>
-/// Covers I4 from specs/004-steamoff-localized-logs-release-flow/tasks.md:
 /// field completeness, localized rendering, and the pending-restart notice
 /// for <see cref="DiagnosticsService.BuildSnapshotAsync"/>/<c>BuildExtendedReportAsync</c>.
 /// Dependencies are faked in-place (no shared TestSupport additions) — the
@@ -73,7 +72,6 @@ public sealed class DiagnosticsSnapshotTests
         Assert.Null(snapshot.LastTestResult); // RunAsync was never called — no cached report yet
 
         // LastReleaseBuildPath mirrors File.Exists on the hardcoded manifest path
-        // (ASSUMPTIONS.md A23) — its value is environment-dependent (build-release.ps1
         // may already have populated release\ in this checkout), so assert the same
         // existence check the service performs rather than assuming either state.
         const string expectedManifestPath = @"C:\Users\adm\Desktop\13\vibe\Steamoff\src\Steamoff.App\release\release-manifest.json";

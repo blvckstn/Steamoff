@@ -6,7 +6,6 @@ namespace Steamoff.Tests.Infrastructure;
 /// Pure-function contract for <see cref="PathNormalizationService"/> — every
 /// raw-input shape named in spec section 4 (quotes, env vars, slashes,
 /// duplicated separators, whitespace, UNC paths) collapses to one clean,
-/// idempotent Windows path string. See contracts/path-normalization.md.
 /// </summary>
 public sealed class PathNormalizationServiceTests
 {

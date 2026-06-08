@@ -7,7 +7,6 @@ namespace Steamoff.App.Tray;
 /// <summary>
 /// Switches a window's native title bar into dark mode via DWM so the stock
 /// Windows chrome matches Steamoff's dark neumorphic theme instead of clashing
-/// with it — keeps native move/resize/minimize for free (see ASSUMPTIONS).
 /// </summary>
 public static class WindowChromeHelper
 {

@@ -7,7 +7,6 @@ namespace Steamoff.Infrastructure.Logging;
 /// <summary>
 /// Append-only structured text log at %ProgramData%\Steamoff\logs\steamoff.log
 /// (falls back to %AppData% on the same writability probe as JsonSettingsService —
-/// see ASSUMPTIONS A3). Thread-safe via a simple lock; rotates the file once it
 /// crosses a size threshold to avoid unbounded growth.
 /// </summary>
 public sealed class FileLogService : ILogService

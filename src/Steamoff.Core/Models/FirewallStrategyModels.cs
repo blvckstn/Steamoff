@@ -2,7 +2,6 @@ namespace Steamoff.Core.Models;
 
 /// <summary>
 /// Identifies which <see cref="Steamoff.Core.Interfaces.IFirewallService"/> implementation
-/// actually performed a rule-application operation. See specs/006-firewall-fallback-strategy/
 /// data-model.md for the full state-machine this participates in.
 /// </summary>
 public enum FirewallStrategyKind

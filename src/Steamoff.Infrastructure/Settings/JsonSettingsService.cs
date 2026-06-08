@@ -8,7 +8,6 @@ namespace Steamoff.Infrastructure.Settings;
 
 /// <summary>
 /// Loads/saves AppSettings as JSON under %ProgramData%\Steamoff (falling back
-/// to %AppData%\Steamoff if ProgramData isn't writable — see ASSUMPTIONS A3).
 /// Writes are atomic (temp file + File.Replace), corrupted files are backed up
 /// rather than overwritten, and the version field drives forward migrations.
 /// </summary>

@@ -11,7 +11,6 @@ namespace Steamoff.Infrastructure.Firewall;
 /// <summary>
 /// Documented fallback IFirewallService implementation that drives
 /// "netsh advfirewall firewall ..." instead of the COM API. Not wired up by
-/// default (ComFirewallService is primary — see ASSUMPTIONS A2 / research R1),
 /// kept available behind the same interface in case COM interop is unavailable
 /// in a given environment. All arguments are passed through
 /// ProcessStartInfo.ArgumentList — never concatenated into a shell string —

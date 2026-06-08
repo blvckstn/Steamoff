@@ -12,7 +12,6 @@ namespace Steamoff.App.Tray;
 /// Owns the NotifyIcon: status-colored icon, honest tooltip text, balloon
 /// notifications, and the context menu (open / toggle / modes / rescan /
 /// settings / logs / exit). Icons are flat-color dots rendered at runtime
-/// (see ASSUMPTIONS — simpler and DPI-safe vs. baking multiple .ico assets).
 /// All visible text is sourced from <see cref="ILocalizationService"/> and
 /// rebuilt instantly when <see cref="ILocalizationService.LanguageChanged"/> fires.
 /// </summary>

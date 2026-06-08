@@ -10,9 +10,7 @@ namespace Steamoff.Infrastructure.Firewall;
 /// <summary>
 /// Default IFirewallService implementation: talks to Microsoft Defender Firewall
 /// via the late-bound INetFwPolicy2 COM API (HNetCfg.FwPolicy2 / HNetCfg.FWRule).
-/// See specs/.../research.md R1 and ASSUMPTIONS.md A2 for why late-bound COM
 /// (no interop assembly / no NuGet package) was chosen, and
-/// contracts/firewall-service.md for the invariants this class must uphold.
 /// </summary>
 public sealed class ComFirewallService : IFirewallService
 {

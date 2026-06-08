@@ -9,19 +9,15 @@ using Steamoff.Core.Services;
 namespace Steamoff.Infrastructure.Firewall;
 
 /// <summary>
-/// Mode-aware 3-way orchestrating <see cref="IFirewallService"/> — promoted from the
-/// feature-006 binary fallback to a full Primary ("Вариант 1") → Secondary ("Вариант 2")
-/// → ScriptFile ("Вариант 3") cascade, per specs/007-scriptfile-strategy-mode-selftest.
-/// In <see cref="FirewallStrategyMode.Auto"/> it tries the remembered last-successful
+/// Mode-aware 3-way orchestrating <see cref="IFirewallService"/> with a full
+/// Primary ("Вариант 1") → Secondary ("Вариант 2") → ScriptFile ("Вариант 3")
+/// cascade. In <see cref="FirewallStrategyMode.Auto"/> it tries the remembered last-successful
 /// strategy first (self-healing — falls through and re-learns if it stops working),
 /// otherwise the canonical order. In a forced mode (<c>ForcePrimary</c>/<c>ForceSecondary</c>/
 /// <c>ForceScriptFile</c>) it runs ONLY that single strategy — no silent fallback — so the
 /// user can deliberately diagnose one specific path (FR-008). The mode and remembered
-/// strategy are captured exactly once at the start of each operation (FR-014) so a
-/// mid-operation settings change cannot affect an in-flight call. See
-/// specs/007-scriptfile-strategy-mode-selftest/contracts/scriptfile-strategy-and-orchestration.md
-/// (C4) for the full decision contract, and specs/006-firewall-fallback-strategy/data-model.md
-/// for the original verification rationale (research.md R2/R3) that this builds on.
+/// strategy are captured exactly once at the start of each operation so a
+/// mid-operation settings change cannot affect an in-flight call.
 /// </summary>
 public sealed class FallbackAwareFirewallService : IFirewallService
 {

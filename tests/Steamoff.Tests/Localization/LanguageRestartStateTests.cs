@@ -3,8 +3,6 @@ using Steamoff.Core.Localization;
 namespace Steamoff.Tests.Localization;
 
 /// <summary>
-/// Covers I1 from specs/004-steamoff-localized-logs-release-flow/tasks.md —
-/// the 5 state-machine scenarios from contracts/language-restart.md, expressed
 /// directly against the pure derivation (no ViewModel/session seam needed).
 /// </summary>
 public sealed class LanguageRestartStateTests

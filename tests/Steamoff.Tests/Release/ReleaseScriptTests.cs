@@ -5,12 +5,11 @@ using System.Text.Json;
 namespace Steamoff.Tests.Release;
 
 /// <summary>
-/// Covers I5 from specs/004-steamoff-localized-logs-release-flow/tasks.md — 4
-/// cases for <c>build-release.ps1</c>: manifest JSON shape/round-trip,
+/// Covers the release script contract: manifest JSON shape/round-trip,
 /// README-RUN.txt content presence, the process-safety path-matching predicate
 /// (exercised in isolation via the script's <c>-TestProcessPath</c> self-test
-/// hook — see ASSUMPTIONS.md A24), and the exit-code-on-failure contract
-/// (script-level smoke run against a copy with no <c>Steamoff.slnx</c>).
+/// hook), and the exit-code-on-failure contract (script-level smoke run
+/// against a copy with no <c>Steamoff.slnx</c>).
 ///
 /// <para>
 /// These are necessarily script-invocation/file-presence tests rather than

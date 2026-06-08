@@ -7,7 +7,6 @@ namespace Steamoff.Tests.Infrastructure;
 
 /// <summary>
 /// Exercises the full normalize → resolve-shortcut → file-or-folder
-/// resolution chain documented in contracts/path-normalization.md, using a
 /// real temp directory tree (no registry/COM access) and a fake shortcut
 /// resolver delegate (spec section 10: "`.lnk` via fake resolver").
 /// </summary>

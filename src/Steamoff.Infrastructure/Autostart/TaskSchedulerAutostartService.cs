@@ -9,7 +9,6 @@ namespace Steamoff.Infrastructure.Autostart;
 /// schtasks.exe (logon trigger, highest privileges, "--tray" argument). Every
 /// argument is passed through ProcessStartInfo.ArgumentList — never through
 /// "cmd /c" string concatenation — so user-controlled values (the exe path)
-/// can never be interpreted as shell syntax. See ASSUMPTIONS A4 / research R3.
 /// </summary>
 public sealed class TaskSchedulerAutostartService : IAutostartService
 {

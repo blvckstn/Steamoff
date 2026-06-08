@@ -5,20 +5,15 @@
     self-contained and framework-dependent variants, writes README-RUN.txt,
     release-manifest.json and release-log.txt.
 
-    See specs/004-steamoff-localized-logs-release-flow/contracts/release-build-flow.md
-    for the exact contract this script implements (pipeline order, process
-    safety rules, manifest schema, log line templates). ASSUMPTIONS.md A20
-    documents the rename-after-publish approach for producing Steamoff.exe.
+    Keeps the release flow deterministic: repo verification, process safety,
+    restore, build, test, publish, manifest, and log output.
 #>
 
 [CmdletBinding()]
 param(
-    # Self-test hook (see I5 in specs/.../tasks.md — "process-safety
-    # path-matching predicate, pure function extracted & tested"): when
-    # supplied, evaluates Test-SteamoffManagedProcessPath against this single
-    # path, prints "True"/"False", and exits — without touching the build
-    # pipeline at all. Lets the test suite exercise the real predicate the
-    # pipeline uses, in isolation, via a subprocess (ASSUMPTIONS.md A24).
+    # Self-test hook: when supplied, evaluates
+    # Test-SteamoffManagedProcessPath against this single path, prints
+    # "True"/"False", and exits without touching the build pipeline.
     [string]$TestProcessPath
 )
 
@@ -27,7 +22,6 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = $PSScriptRoot
 
 # Process safety ("never touch Steam") — exact name+path double-guard rules
-# from contracts/release-build-flow.md. This is the path half of the guard,
 # extracted as its own pure, named, isolation-testable function: given a
 # candidate process's resolved module path and the repo root, decide whether
 # it is safe to treat as "our own Steamoff build artifact" (and therefore
@@ -116,7 +110,6 @@ try {
     $sw.Stop()
     Write-ReleaseLog "dotnet build -c Release — OK ($([int]$sw.Elapsed.TotalSeconds)s), 0 ошибок / 0 errors"
 
-    # 4. dotnet test (with roll-forward env vars — environment runtime mismatch workaround, ASSUMPTIONS.md A9)
     $env:DOTNET_ROLL_FORWARD = 'LatestMajor'
     $env:DOTNET_ROLL_FORWARD_TO_PRERELEASE = '1'
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
